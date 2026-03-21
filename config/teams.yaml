@@ -1,0 +1,43 @@
+# Team definitions — maps issue categories to on-call SMEs
+# PULSE uses this to auto-route incidents and bridge calls
+
+teams:
+  - id: secops
+    name: Security Operations
+    domains: [threat, auth_failure, intrusion, malware, port_scan, privilege_escalation, lateral_movement]
+    contact:
+      slack: "#secops-alerts"
+      email: secops@company.com
+      pagerduty_service: SECOPS01
+
+  - id: netops
+    name: Network Operations
+    domains: [network, latency, packet_loss, dns, firewall, bandwidth, connectivity]
+    contact:
+      slack: "#netops-alerts"
+      email: netops@company.com
+      pagerduty_service: NETOPS01
+
+  - id: appdev
+    name: Application Development
+    domains: [application, memory_leak, cpu_spike, error_rate, crash, deploy, code]
+    contact:
+      slack: "#appdev-alerts"
+      email: appdev@company.com
+      pagerduty_service: APPDEV01
+
+  - id: dba
+    name: Database Administration
+    domains: [database, slow_query, connection_pool, replication, disk_io, postgres, mysql, redis]
+    contact:
+      slack: "#dba-alerts"
+      email: dba@company.com
+      pagerduty_service: DBA01
+
+  - id: infra
+    name: Infrastructure / SRE
+    domains: [cpu, memory, disk, kernel, hardware, host, container, kubernetes, oom]
+    contact:
+      slack: "#infra-alerts"
+      email: infra@company.com
+      pagerduty_service: INFRA01

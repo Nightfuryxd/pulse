@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pulse-postgres
+    environment:
+      POSTGRES_DB: pulse
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulse_secret}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: pulse-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: pulse-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://pulse:${POSTGRES_PASSWORD:-pulse_secret}@postgres:5432/pulse
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./api:/app
+      - ./config:/app/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: pulse-agent
+    env_file: .env
+    environment:
+      PULSE_API_URL: http://api:8000
+      NODE_ID: ${HOSTNAME:-local-node}
+      COLLECT_INTERVAL: "10"
+      # SNMP: comma-separated IPs of routers/switches/firewalls
+      # SNMP_TARGETS: 192.168.1.1,192.168.1.254
+      # SNMP_COMMUNITY: public
+      # SSH agentless: user@host pairs
+      # SSH_TARGETS: ops@10.0.1.5,ops@10.0.1.6
+      # SSH_USER: ops  (used by auto-discovery)
+      # Auto-discovery (ping sweep + SNMP/SSH probe)
+      # ENABLE_DISCOVERY: "true"
+      # NETWORK_RANGE: 192.168.1.0/24
+    volumes:
+      - ./agent:/app
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /var/log:/host/var/log:ro
+      # For SSH agentless: mount SSH key
+      # - ~/.ssh:/root/.ssh:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    # network_mode: host   # Uncomment if SNMP/SSH targets are on LAN
+    privileged: true
+
+volumes:
+  postgres_data:

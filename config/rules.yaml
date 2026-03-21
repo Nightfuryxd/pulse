@@ -1,0 +1,120 @@
+# Detection rules — evaluated against incoming metrics and events
+# severity: critical | high | medium | low
+# category maps to teams.yaml domains for auto-routing
+
+rules:
+  # ── Infrastructure ─────────────────────────────────────────────────────
+  - id: cpu_critical
+    name: CPU Critical
+    condition: "metric.cpu_percent >= 95"
+    window_seconds: 60
+    severity: critical
+    category: cpu
+    message: "CPU usage at {value:.1f}% for over 60s"
+
+  - id: cpu_high
+    name: CPU High
+    condition: "metric.cpu_percent >= 85"
+    window_seconds: 180
+    severity: high
+    category: cpu
+    message: "CPU sustained at {value:.1f}% for 3 minutes"
+
+  - id: memory_critical
+    name: Memory Critical
+    condition: "metric.memory_percent >= 95"
+    window_seconds: 30
+    severity: critical
+    category: memory
+    message: "Memory at {value:.1f}% — OOM kill risk"
+
+  - id: memory_high
+    name: Memory High
+    condition: "metric.memory_percent >= 85"
+    window_seconds: 120
+    severity: high
+    category: memory
+    message: "Memory usage elevated at {value:.1f}%"
+
+  - id: disk_critical
+    name: Disk Full
+    condition: "metric.disk_percent >= 95"
+    window_seconds: 0
+    severity: critical
+    category: disk
+    message: "Disk at {value:.1f}% — immediate action required"
+
+  - id: disk_high
+    name: Disk High
+    condition: "metric.disk_percent >= 85"
+    window_seconds: 0
+    severity: high
+    category: disk
+    message: "Disk usage at {value:.1f}%"
+
+  # ── Security ────────────────────────────────────────────────────────────
+  - id: auth_brute_force
+    name: Authentication Brute Force
+    condition: "event.type == 'auth_failure' and event.count >= 10"
+    window_seconds: 60
+    severity: critical
+    category: auth_failure
+    message: "{count} failed login attempts from {source_ip} in 60s"
+
+  - id: auth_failure_repeated
+    name: Repeated Auth Failures
+    condition: "event.type == 'auth_failure' and event.count >= 3"
+    window_seconds: 300
+    severity: high
+    category: auth_failure
+    message: "{count} failed logins for user '{user}' in 5 minutes"
+
+  - id: port_scan
+    name: Port Scan Detected
+    condition: "event.type == 'connection' and event.unique_ports >= 20"
+    window_seconds: 30
+    severity: critical
+    category: port_scan
+    message: "Port scan from {source_ip} — {unique_ports} ports probed"
+
+  - id: privilege_escalation
+    name: Privilege Escalation Attempt
+    condition: "event.type == 'privilege_escalation'"
+    window_seconds: 0
+    severity: critical
+    category: privilege_escalation
+    message: "Privilege escalation: {user} attempted sudo/su as {target}"
+
+  - id: suspicious_process
+    name: Suspicious Process
+    condition: "event.type == 'suspicious_process'"
+    window_seconds: 0
+    severity: high
+    category: threat
+    message: "Suspicious process detected: {process} (PID {pid})"
+
+  # ── Application ─────────────────────────────────────────────────────────
+  - id: high_error_rate
+    name: High Error Rate
+    condition: "metric.error_rate >= 5.0"
+    window_seconds: 60
+    severity: high
+    category: application
+    message: "Error rate at {value:.1f}% on {service}"
+
+  - id: process_crash
+    name: Process Crash
+    condition: "event.type == 'process_exit' and event.exit_code != 0"
+    window_seconds: 0
+    severity: high
+    category: crash
+    message: "Process '{process}' crashed with exit code {exit_code}"
+
+  # ── Network ─────────────────────────────────────────────────────────────
+  - id: high_network_traffic
+    name: Unusual Network Traffic
+    condition: "metric.net_bytes_sent_mb >= 500 or metric.net_bytes_recv_mb >= 500"
+    window_seconds: 60
+    severity: medium
+    category: network
+    message: "Unusual network traffic: {value:.0f}MB/min"

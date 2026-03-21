@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PULSE — Infrastructure Intelligence</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:       #080c14;
+  --surface:  #0d1424;
+  --surface2: #111d30;
+  --surface3: #162236;
+  --border:   #1a2d45;
+  --border2:  #223550;
+  --accent:   #2563eb;
+  --accent2:  #3b82f6;
+  --cyan:     #06b6d4;
+  --green:    #10b981;
+  --yellow:   #f59e0b;
+  --red:      #ef4444;
+  --purple:   #8b5cf6;
+  --text:     #e2e8f0;
+  --text2:    #94a3b8;
+  --text3:    #64748b;
+  --sidebar:  220px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px;display:flex;height:100vh;overflow:hidden}
+
+/* ── Sidebar ── */
+#sidebar{width:var(--sidebar);min-width:var(--sidebar);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.sb-logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sb-logo-mark{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--cyan));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff}
+.sb-logo-text{font-size:16px;font-weight:800;letter-spacing:2px;color:var(--text)}
+.sb-logo-sub{font-size:10px;color:var(--text3);letter-spacing:1px;margin-top:1px}
+.sb-nav{flex:1;padding:12px 0;overflow-y:auto}
+.sb-section{padding:8px 16px 4px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 16px;cursor:pointer;border-left:3px solid transparent;color:var(--text2);transition:all .15s}
+.sb-item:hover{background:var(--surface2);color:var(--text)}
+.sb-item.active{background:var(--surface3);color:var(--accent2);border-left-color:var(--accent2)}
+.sb-item-icon{font-size:15px;width:18px;text-align:center}
+.sb-item-label{font-size:13px;font-weight:500}
+.sb-badge{margin-left:auto;background:#7f1d1d;color:#fca5a5;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px}
+.sb-badge.warn{background:#78350f;color:#fde68a}
+.sb-footer{padding:14px 16px;border-top:1px solid var(--border)}
+.ws-indicator{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)}
+.ws-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── Main area ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px;min-height:52px}
+.topbar-title{font-size:16px;font-weight:700;color:var(--text)}
+.topbar-right{display:flex;align-items:center;gap:16px}
+.clock{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
+.refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .15s}
+.refresh-btn:hover{background:var(--surface3);color:var(--text)}
+
+/* ── Stat strip ── */
+.stat-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border)}
+.stat-tile{background:var(--surface);padding:14px 20px;display:flex;flex-direction:column;gap:4px}
+.stat-tile-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3)}
+.stat-tile-val{font-size:26px;font-weight:800;line-height:1}
+.stat-tile-val.green{color:var(--green)}
+.stat-tile-val.red{color:var(--red)}
+.stat-tile-val.yellow{color:var(--yellow)}
+.stat-tile-val.cyan{color:var(--cyan)}
+.stat-tile-sub{font-size:11px;color:var(--text3)}
+
+/* ── Content ── */
+#content{flex:1;overflow-y:auto;padding:20px 24px}
+
+/* ── Panels ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.panel+.panel,.panel+.grid2,.grid2+.panel{margin-top:16px}
+.ph{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ph-title{font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+.ph-title-icon{color:var(--accent2)}
+.ph-right{display:flex;align-items:center;gap:10px}
+.pb{padding:16px}
+.pb-scroll{padding:0;overflow-y:auto;max-height:340px}
+
+/* ── Grid layouts ── */
+.grid2{display:grid;gap:16px}
+.col-6-4{grid-template-columns:1fr 380px}
+.col-3{grid-template-columns:repeat(3,1fr)}
+.col-2{grid-template-columns:1fr 1fr}
+
+/* ── Node cards ── */
+.node-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;padding:14px}
+.node-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.node-card:hover{border-color:var(--border2);background:var(--surface3)}
+.node-card.selected{border-color:var(--accent2);background:var(--surface3)}
+.node-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.node-card.ok::before{background:var(--green)}
+.node-card.warn::before{background:var(--yellow)}
+.node-card.crit::before{background:var(--red)}
+.node-card.offline::before{background:var(--text3)}
+.nc-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nc-ip{font-size:11px;color:var(--text3);margin-top:2px}
+.nc-os{font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nc-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:10px}
+.nc-metric{text-align:center}
+.nc-metric-label{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px}
+.nc-metric-val{font-size:14px;font-weight:700;margin-top:2px}
+.nc-metric-val.ok{color:var(--green)}
+.nc-metric-val.warn{color:var(--yellow)}
+.nc-metric-val.crit{color:var(--red)}
+.nc-tag{display:inline-block;font-size:9px;padding:2px 6px;border-radius:10px;margin-top:8px;font-weight:700;text-transform:uppercase}
+.nc-tag.snmp{background:#1e3a5f;color:var(--cyan)}
+.nc-tag.ssh{background:#1a3a2a;color:var(--green)}
+.nc-tag.local{background:#2d1a5f;color:var(--purple)}
+
+/* ── Charts ── */
+.chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:16px}
+.chart-box{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px}
+.chart-box-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px}
+.chart-box canvas{max-height:120px}
+
+/* ── Alerts ── */
+.alert-list{padding:0}
+.alert-row{display:flex;align-items:flex-start;gap:12px;padding:11px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.alert-row:last-child{border-bottom:none}
+.alert-row:hover{background:var(--surface2)}
+.alert-sev{width:6px;min-width:6px;border-radius:3px;align-self:stretch}
+.alert-sev.critical{background:var(--red)}
+.alert-sev.high{background:var(--yellow)}
+.alert-sev.medium{background:var(--cyan)}
+.alert-sev.low{background:var(--green)}
+.badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;text-transform:uppercase;white-space:nowrap}
+.badge.critical{background:#7f1d1d;color:#fca5a5}
+.badge.high{background:#78350f;color:#fde68a}
+.badge.medium{background:#1e3a5f;color:#93c5fd}
+.badge.low{background:#1a3a2a;color:#6ee7b7}
+.badge.info{background:#1e293b;color:#94a3b8}
+.badge.open{background:#1a3a2a;color:#6ee7b7}
+.badge.investigating{background:#1e3a5f;color:#93c5fd}
+.badge.resolved{background:#1e293b;color:#64748b}
+.alert-body{flex:1;min-width:0}
+.alert-title{font-size:13px;font-weight:600}
+.alert-sub{font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.resolve-btn{font-size:11px;background:var(--surface3);border:1px solid var(--border);color:var(--text2);padding:3px 8px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.resolve-btn:hover{background:var(--border);color:var(--text)}
+
+/* ── Incidents ── */
+.incident-item{padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.incident-item:last-child{border-bottom:none}
+.incident-item:hover{background:var(--surface2)}
+.incident-item.expanded{background:var(--surface2)}
+.ii-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ii-title{font-size:13px;font-weight:700;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ii-meta{font-size:11px;color:var(--text3);margin-top:4px}
+.ii-rca{margin-top:12px;background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:12px;display:none}
+.incident-item.expanded .ii-rca{display:block}
+.rca-row{display:grid;grid-template-columns:120px 1fr;gap:8px;margin-bottom:8px;align-items:start}
+.rca-row:last-child{margin-bottom:0}
+.rca-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding-top:2px}
+.rca-val{font-size:12px;color:var(--text2);line-height:1.5}
+.rca-actions{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.rca-action-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px}
+.action-step{display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:12px;color:var(--text2)}
+.action-num{background:var(--accent);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.team-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.team-tag{background:#1e3a5f;color:#93c5fd;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+.bridge-info{margin-top:8px;font-size:11px;color:var(--green)}
+
+/* ── Events feed ── */
+.event-row{display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)}
+.event-row:last-child{border-bottom:none}
+.event-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;margin-top:1px}
+.event-icon.auth_failure{background:#7f1d1d}
+.event-icon.port_scan{background:#3b0764}
+.event-icon.suspicious_process{background:#7c2d12}
+.event-icon.oom_kill{background:#1e3a5f}
+.event-icon.segfault{background:#713f12}
+.event-icon.process_exit{background:#1e293b}
+.event-icon.default{background:#1e293b}
+.event-body{flex:1;min-width:0}
+.event-msg{font-size:12px;font-weight:600}
+.event-meta{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* ── Table ── */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{padding:10px 16px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);border-bottom:1px solid var(--border);background:var(--surface2)}
+.data-table td{padding:10px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:var(--surface2)}
+
+/* ── Filters ── */
+.filter-bar{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)}
+select,input{background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;outline:none}
+select:focus,input:focus{border-color:var(--accent2)}
+.filter-btn{background:var(--surface3);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+.filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px;max-width:340px}
+.toast-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;animation:slideIn .25s ease;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.toast-item.critical{border-left:3px solid var(--red)}
+.toast-item.high{border-left:3px solid var(--yellow)}
+.toast-item.incident{border-left:3px solid var(--purple)}
+@keyframes slideIn{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* ── Progress bars ── */
+.bar-bg{background:var(--surface3);border-radius:4px;height:5px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.bar-fill.ok{background:var(--green)}
+.bar-fill.warn{background:var(--yellow)}
+.bar-fill.crit{background:var(--red)}
+
+/* ── Empty / loading ── */
+.empty{color:var(--text3);text-align:center;padding:30px 0;font-size:13px}
+.loading{color:var(--text3);text-align:center;padding:20px 0;font-size:12px}
+
+/* ── Views ── */
+.view{display:none}
+.view.active{display:block}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<div id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-mark">P</div>
+    <div>
+      <div class="sb-logo-text">PULSE</div>
+      <div class="sb-logo-sub">INFRASTRUCTURE INTELLIGENCE</div>
+    </div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-section">Monitor</div>
+    <div class="sb-item active" onclick="showView('overview')">
+      <span class="sb-item-icon">⬡</span><span class="sb-item-label">Overview</span>
+    </div>
+    <div class="sb-item" onclick="showView('nodes')">
+      <span class="sb-item-icon">◈</span><span class="sb-item-label">Nodes</span>
+    </div>
+    <div class="sb-item" onclick="showView('metrics')">
+      <span class="sb-item-icon">◎</span><span class="sb-item-label">Metrics</span>
+    </div>
+    <div class="sb-section">Respond</div>
+    <div class="sb-item" onclick="showView('alerts')">
+      <span class="sb-item-icon">◬</span><span class="sb-item-label">Alerts</span>
+      <span class="sb-badge" id="sbAlertBadge" style="display:none">0</span>
+    </div>
+    <div class="sb-item" onclick="showView('incidents')">
+      <span class="sb-item-icon">⚡</span><span class="sb-item-label">Incidents</span>
+      <span class="sb-badge warn" id="sbIncidentBadge" style="display:none">0</span>
+    </div>
+    <div class="sb-section">Observe</div>
+    <div class="sb-item" onclick="showView('events')">
+      <span class="sb-item-icon">◉</span><span class="sb-item-label">Event Feed</span>
+    </div>
+  </nav>
+  <div class="sb-footer">
+    <div class="ws-indicator">
+      <div class="ws-dot" id="wsDot" style="background:var(--yellow)"></div>
+      <span id="wsStatus">Connecting…</span>
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:var(--text3)" id="clock"></div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div id="main">
+  <div class="topbar">
+    <div class="topbar-title" id="topbarTitle">Overview</div>
+    <div class="topbar-right">
+      <button class="refresh-btn" onclick="loadAll()">↺ Refresh</button>
+    </div>
+  </div>
+
+  <!-- Stat strip (always visible) -->
+  <div class="stat-strip">
+    <div class="stat-tile">
+      <div class="stat-tile-label">Nodes Online</div>
+      <div class="stat-tile-val green" id="statNodes">—</div>
+      <div class="stat-tile-sub">monitored hosts</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Open Alerts</div>
+      <div class="stat-tile-val yellow" id="statAlerts">—</div>
+      <div class="stat-tile-sub">unresolved</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Critical</div>
+      <div class="stat-tile-val red" id="statCritical">—</div>
+      <div class="stat-tile-sub">need action now</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Open Incidents</div>
+      <div class="stat-tile-val cyan" id="statIncidents">—</div>
+      <div class="stat-tile-sub">active war rooms</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Events (1h)</div>
+      <div class="stat-tile-val" id="statEvents">—</div>
+      <div class="stat-tile-sub">security + system</div>
+    </div>
+    <div class="stat-tile">
+      <div class="stat-tile-label">Dashboard Clients</div>
+      <div class="stat-tile-val" id="statClients">—</div>
+      <div class="stat-tile-sub">live connections</div>
+    </div>
+  </div>
+
+  <div id="content">
+
+    <!-- ══ VIEW: OVERVIEW ══ -->
+    <div class="view active" id="view-overview">
+      <div class="grid2 col-6-4">
+        <div>
+          <!-- Multi-metric charts -->
+          <div class="panel">
+            <div class="ph">
+              <div class="ph-title"><span class="ph-title-icon">◎</span> Live Metrics</div>
+              <div class="ph-right">
+                <select id="nodeSelectMetric" onchange="switchNode(this.value)">
+                  <option value="">All Nodes</option>
+                </select>
+              </div>
+            </div>
+            <div class="chart-grid">
+              <div class="chart-box">
+                <div class="chart-box-title">CPU %</div>
+                <canvas id="cpuChart"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-box-title">Memory %</div>
+                <canvas id="memChart"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-box-title">Disk %</div>
+                <canvas id="diskChart"></canvas>
+              </div>
+              <div class="chart-box">
+                <div class="chart-box-title">Network (KB/s recv)</div>
+                <canvas id="netChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent alerts -->
+          <div class="panel" style="margin-top:16px">
+            <div class="ph">
+              <div class="ph-title"><span class="ph-title-icon">◬</span> Active Alerts</div>
+              <div class="ph-right">
+                <span id="alertCountBadge" style="font-size:11px;color:var(--text3)"></span>
+                <button class="filter-btn" onclick="showView('alerts')">View All</button>
+              </div>
+            </div>
+            <div class="alert-list pb-scroll" id="overviewAlertList" style="max-height:260px">
+              <div class="empty">No active alerts</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Nodes sidebar -->
+          <div class="panel">
+            <div class="ph">
+              <div class="ph-title"><span class="ph-title-icon">◈</span> Nodes</div>
+              <div class="ph-right">
+                <span id="nodeCountLabel" style="font-size:11px;color:var(--text3)"></span>
+              </div>
+            </div>
+            <div class="pb-scroll" id="sideNodeList" style="max-height:320px">
+              <div class="empty">No nodes reporting</div>
+            </div>
+          </div>
+
+          <!-- Recent incidents -->
+          <div class="panel" style="margin-top:16px">
+            <div class="ph">
+              <div class="ph-title"><span class="ph-title-icon">⚡</span> Recent Incidents</div>
+              <button class="filter-btn" onclick="showView('incidents')">View All</button>
+            </div>
+            <div class="pb-scroll" id="overviewIncidentList" style="max-height:300px">
+              <div class="empty">No incidents</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: NODES ══ -->
+    <div class="view" id="view-nodes">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◈</span> All Monitored Nodes</div>
+          <div class="ph-right">
+            <select id="nodeTypeFilter" onchange="filterNodes()">
+              <option value="">All Types</option>
+              <option value="local">Local Agent</option>
+              <option value="snmp">SNMP</option>
+              <option value="ssh">SSH Agentless</option>
+            </select>
+          </div>
+        </div>
+        <div class="node-grid" id="nodeCardGrid">
+          <div class="empty" style="grid-column:1/-1">Loading nodes…</div>
+        </div>
+      </div>
+
+      <!-- Node detail (shown when a node is selected) -->
+      <div class="panel" id="nodeDetailPanel" style="margin-top:16px;display:none">
+        <div class="ph">
+          <div class="ph-title" id="nodeDetailTitle">Node Detail</div>
+          <button class="filter-btn" onclick="closeNodeDetail()">✕ Close</button>
+        </div>
+        <div class="chart-grid" id="nodeDetailCharts"></div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: METRICS ══ -->
+    <div class="view" id="view-metrics">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◎</span> Metric History</div>
+          <div class="ph-right">
+            <select id="metricNodeSelect" onchange="loadMetricHistory()">
+              <option value="">Select a node…</option>
+            </select>
+            <select id="metricRange" onchange="loadMetricHistory()">
+              <option value="60">Last 1h</option>
+              <option value="360">Last 6h</option>
+              <option value="1440">Last 24h</option>
+            </select>
+          </div>
+        </div>
+        <div class="chart-grid" id="metricHistoryCharts">
+          <div class="empty" style="grid-column:1/-1;padding:40px">Select a node to view history</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: ALERTS ══ -->
+    <div class="view" id="view-alerts">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◬</span> All Alerts</div>
+          <div class="ph-right" id="alertResolveBar" style="display:none">
+            <button class="filter-btn active" onclick="resolveSelected()">Resolve Selected</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-btn active" id="fAll"      onclick="setAlertFilter('all')">All</button>
+          <button class="filter-btn"        id="fCrit"     onclick="setAlertFilter('critical')">Critical</button>
+          <button class="filter-btn"        id="fHigh"     onclick="setAlertFilter('high')">High</button>
+          <button class="filter-btn"        id="fMedium"   onclick="setAlertFilter('medium')">Medium</button>
+          <button class="filter-btn"        id="fResolved" onclick="setAlertFilter('resolved')">Resolved</button>
+        </div>
+        <div id="alertTableWrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:32px"><input type="checkbox" id="selectAllAlerts" onchange="toggleSelectAll(this)"></th>
+                <th>Severity</th><th>Rule</th><th>Node</th><th>Message</th><th>Time</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="alertTableBody"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: INCIDENTS ══ -->
+    <div class="view" id="view-incidents">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">⚡</span> Incidents + RCA</div>
+          <div class="ph-right">
+            <select id="incidentStatusFilter" onchange="loadIncidentsView()">
+              <option value="">All Status</option>
+              <option value="open">Open</option>
+              <option value="investigating">Investigating</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+        </div>
+        <div id="incidentListFull">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: EVENTS ══ -->
+    <div class="view" id="view-events">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◉</span> Security &amp; System Events</div>
+          <div class="ph-right">
+            <select id="eventNodeFilter" onchange="loadEventsView()">
+              <option value="">All Nodes</option>
+            </select>
+          </div>
+        </div>
+        <div id="eventListFull">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- #content -->
+</div><!-- #main -->
+
+<div class="toast" id="toastContainer"></div>
+
+<script>
+const API = window.location.origin;
+const WS  = `${API.replace('http','ws')}/ws/live`;
+
+// ── State ──────────────────────────────────────────────────────────────────
+let ws, selectedNode = '';
+let allNodes    = [];
+let alertFilter = 'all';
+let lastNetRecv = {};
+let prevNetRecv = {};
+let selectedAlerts = new Set();
+
+// ── Chart instances ──────────────────────────────────────────────────────
+const chartDefs = { cpu: null, mem: null, disk: null, net: null };
+const chartData = {
+  labels: [],
+  cpu:  { data:[], color:'#3b82f6' },
+  mem:  { data:[], color:'#8b5cf6' },
+  disk: { data:[], color:'#f59e0b' },
+  net:  { data:[], color:'#06b6d4' },
+};
+
+function makeChartData(color) {
+  return {
+    labels: [],
+    datasets:[{ data:[], borderColor:color, backgroundColor: color+'22',
+      tension:.4, fill:true, pointRadius:0, borderWidth:1.5 }]
+  };
+}
+
+const cpuCD   = makeChartData('#3b82f6');
+const memCD   = makeChartData('#8b5cf6');
+const diskCD  = makeChartData('#f59e0b');
+const netCD   = makeChartData('#06b6d4');
+
+const chartOpts = (yLabel='%',yMax=100) => ({
+  animation:false,
+  plugins:{legend:{display:false}},
+  scales:{
+    y:{min:0,max:yMax,grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10},callback:v=>v+yLabel}},
+    x:{grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10},maxTicksLimit:6}}
+  }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  chartDefs.cpu  = new Chart(document.getElementById('cpuChart'),  {type:'line', data:cpuCD,  options:chartOpts('%',100)});
+  chartDefs.mem  = new Chart(document.getElementById('memChart'),  {type:'line', data:memCD,  options:chartOpts('%',100)});
+  chartDefs.disk = new Chart(document.getElementById('diskChart'), {type:'line', data:diskCD, options:chartOpts('%',100)});
+  chartDefs.net  = new Chart(document.getElementById('netChart'),  {type:'line', data:netCD,  options:{...chartOpts('KB/s'),scales:{...chartOpts('KB/s').scales,y:{...chartOpts('KB/s').scales.y,max:undefined}}}});
+
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toUTCString().replace('GMT','UTC').slice(0,-4);
+  }, 1000);
+
+  connectWS();
+  loadAll();
+  setInterval(loadAll, 10000);
+});
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+function connectWS() {
+  ws = new WebSocket(WS);
+  ws.onopen = () => {
+    document.getElementById('wsStatus').textContent = 'Live';
+    document.getElementById('wsDot').style.background = 'var(--green)';
+  };
+  ws.onclose = () => {
+    document.getElementById('wsStatus').textContent = 'Reconnecting…';
+    document.getElementById('wsDot').style.background = 'var(--yellow)';
+    setTimeout(connectWS, 3000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'metric')   handleMetricWS(msg);
+    if (msg.type === 'alert')    handleAlertWS(msg);
+    if (msg.type === 'incident') handleIncidentWS(msg);
+  };
+}
+
+function handleMetricWS(msg) {
+  const d = msg.data;
+  if (selectedNode && d.node_id !== selectedNode) return;
+
+  const ts = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  [cpuCD, memCD, diskCD, netCD].forEach(cd => {
+    cd.labels.push(ts);
+    if (cd.labels.length > 60) cd.labels.shift();
+  });
+
+  // Net KB/s delta
+  const prevR = prevNetRecv[d.node_id] || d.net_bytes_recv;
+  const kbps  = Math.max(0, Math.round((d.net_bytes_recv - prevR) / 10 / 1024));
+  prevNetRecv[d.node_id] = d.net_bytes_recv;
+
+  [cpuCD.datasets[0].data, memCD.datasets[0].data, diskCD.datasets[0].data, netCD.datasets[0].data].forEach(arr => {
+    if (arr.length > 60) arr.shift();
+  });
+  cpuCD.datasets[0].data.push(d.cpu_percent);
+  memCD.datasets[0].data.push(d.memory_percent);
+  diskCD.datasets[0].data.push(d.disk_percent);
+  netCD.datasets[0].data.push(kbps);
+
+  Object.values(chartDefs).forEach(c => c && c.update());
+  loadNodes();
+}
+
+function handleAlertWS(msg) {
+  const a = msg.data;
+  if (a.severity === 'critical' || a.severity === 'high') showToast(a.severity, a.rule_name, a.message);
+  loadStats(); loadAlerts(); updateBadges();
+}
+
+function handleIncidentWS(msg) {
+  const i = msg.data;
+  showToast('incident', `INC-${i.id}: ${i.title}`, i.rca?.root_cause || 'RCA in progress…');
+  loadStats(); loadIncidentsOverview(); updateBadges();
+}
+
+// ── Views ──────────────────────────────────────────────────────────────────
+const viewTitles = {
+  overview:'Overview', nodes:'Nodes', metrics:'Metric History',
+  alerts:'Alerts', incidents:'Incidents', events:'Event Feed'
+};
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(i => {
+    if (i.getAttribute('onclick')?.includes(name)) i.classList.add('active');
+  });
+  document.getElementById('topbarTitle').textContent = viewTitles[name] || name;
+  if (name === 'alerts')    loadAlertsView();
+  if (name === 'incidents') loadIncidentsView();
+  if (name === 'events')    loadEventsView();
+  if (name === 'nodes')     renderNodeCards();
+  if (name === 'metrics')   populateMetricNodeSelect();
+}
+
+// ── Load all data ──────────────────────────────────────────────────────────
+function loadAll() {
+  loadStats(); loadNodes(); loadAlerts(); loadIncidentsOverview();
+  updateBadges();
+}
+
+async function loadStats() {
+  const r = await fetch(`${API}/api/stats`).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  document.getElementById('statNodes').textContent    = r.nodes;
+  document.getElementById('statAlerts').textContent   = r.open_alerts;
+  document.getElementById('statCritical').textContent = r.critical_alerts;
+  document.getElementById('statIncidents').textContent= r.open_incidents;
+  document.getElementById('statClients').textContent  = r.connected_clients;
+}
+
+async function loadNodes() {
+  const r = await fetch(`${API}/api/nodes`).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  allNodes = r.nodes;
+
+  document.getElementById('nodeCountLabel').textContent = `${r.nodes.length} nodes`;
+
+  // Update select dropdowns
+  ['nodeSelectMetric','metricNodeSelect','eventNodeFilter'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const existing = [...sel.options].map(o=>o.value);
+    r.nodes.forEach(n => {
+      if (!existing.includes(n.id)) {
+        const opt = document.createElement('option');
+        opt.value = n.id; opt.textContent = n.hostname || n.id;
+        sel.appendChild(opt);
+      }
+    });
+  });
+
+  // Side node list (overview)
+  renderSideNodeList(r.nodes);
+  // Node card grid (nodes view)
+  if (document.getElementById('view-nodes').classList.contains('active')) renderNodeCards();
+  // Event stats
+  document.getElementById('statEvents').textContent = '—';
+}
+
+function nodeType(n) {
+  if (n.id.startsWith('snmp:')) return 'snmp';
+  if (n.id.startsWith('ssh:'))  return 'ssh';
+  return 'local';
+}
+
+function nodeHealth(m) {
+  if (!m || !Object.keys(m).length) return 'offline';
+  if ((m.cpu_percent||0) >= 85 || (m.memory_percent||0) >= 85 || (m.disk_percent||0) >= 85) return 'crit';
+  if ((m.cpu_percent||0) >= 60 || (m.memory_percent||0) >= 70) return 'warn';
+  return 'ok';
+}
+
+function colorForVal(v, warnAt=60, critAt=85) {
+  if (v >= critAt) return 'crit';
+  if (v >= warnAt) return 'warn';
+  return 'ok';
+}
+
+function renderSideNodeList(nodes) {
+  const el = document.getElementById('sideNodeList');
+  if (!nodes.length) { el.innerHTML = '<div class="empty">No nodes reporting</div>'; return; }
+  el.innerHTML = nodes.map(n => {
+    const m = n.latest_metric || {};
+    const h = nodeHealth(m);
+    const type = nodeType(n);
+    return `<div class="node-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="switchNode('${n.id}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.hostname}</div>
+        <div style="font-size:11px;color:var(--text3)">${n.ip} · <span class="badge ${type}" style="font-size:9px">${type.toUpperCase()}</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-left:10px;font-size:12px">
+        <span style="color:${h==='crit'?'var(--red)':h==='warn'?'var(--yellow)':'var(--green)'}">${(m.cpu_percent||0).toFixed(0)}%</span>
+        <span style="color:var(--text3)">CPU</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderNodeCards() {
+  const typeFilter = document.getElementById('nodeTypeFilter')?.value || '';
+  const filtered = typeFilter ? allNodes.filter(n => nodeType(n) === typeFilter) : allNodes;
+  const el = document.getElementById('nodeCardGrid');
+  if (!filtered.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">No nodes found</div>'; return; }
+  el.innerHTML = filtered.map(n => {
+    const m = n.latest_metric || {};
+    const h = nodeHealth(m);
+    const type = nodeType(n);
+    const cpu  = (m.cpu_percent||0).toFixed(1);
+    const mem  = (m.memory_percent||0).toFixed(1);
+    const disk = (m.disk_percent||0).toFixed(1);
+    return `<div class="node-card ${h} ${n.id===selectedNode?'selected':''}" onclick="selectNodeCard('${n.id}','${n.hostname}')">
+      <div class="nc-name">${n.hostname}</div>
+      <div class="nc-ip">${n.ip}</div>
+      <div class="nc-os">${n.os||'—'}</div>
+      <div class="nc-metrics">
+        <div class="nc-metric"><div class="nc-metric-label">CPU</div><div class="nc-metric-val ${colorForVal(cpu)}">${cpu}%</div></div>
+        <div class="nc-metric"><div class="nc-metric-label">MEM</div><div class="nc-metric-val ${colorForVal(mem)}">${mem}%</div></div>
+        <div class="nc-metric"><div class="nc-metric-label">DISK</div><div class="nc-metric-val ${colorForVal(disk,70,90)}">${disk}%</div></div>
+      </div>
+      <span class="nc-tag ${type}">${type==='local'?'AGENT':type.toUpperCase()}</span>
+    </div>`;
+  }).join('');
+}
+
+function filterNodes() { renderNodeCards(); }
+
+function selectNodeCard(nodeId, hostname) {
+  selectedNode = nodeId;
+  renderNodeCards();
+  const panel = document.getElementById('nodeDetailPanel');
+  panel.style.display = 'block';
+  document.getElementById('nodeDetailTitle').textContent = `${hostname} — Metric History`;
+  loadNodeDetailCharts(nodeId);
+}
+
+function closeNodeDetail() {
+  document.getElementById('nodeDetailPanel').style.display = 'none';
+  selectedNode = '';
+  renderNodeCards();
+}
+
+async function loadNodeDetailCharts(nodeId) {
+  const el = document.getElementById('nodeDetailCharts');
+  el.innerHTML = '<div class="empty" style="grid-column:1/-1">Loading…</div>';
+  const r = await fetch(`${API}/api/nodes/${encodeURIComponent(nodeId)}/metrics?minutes=60`).then(r=>r.json()).catch(()=>null);
+  if (!r || !r.metrics.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">No history</div>'; return; }
+
+  const labels = r.metrics.map(m => new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  const metrics = [
+    { key:'cpu',   label:'CPU %',      color:'#3b82f6', data: r.metrics.map(m=>m.cpu)  },
+    { key:'mem',   label:'Memory %',   color:'#8b5cf6', data: r.metrics.map(m=>m.memory) },
+    { key:'disk',  label:'Disk %',     color:'#f59e0b', data: r.metrics.map(m=>m.disk)  },
+    { key:'load',  label:'Load Avg',   color:'#06b6d4', data: r.metrics.map(m=>m.load)  },
+  ];
+
+  el.innerHTML = metrics.map(m => `<div class="chart-box"><div class="chart-box-title">${m.label}</div><canvas id="dc_${m.key}"></canvas></div>`).join('');
+  metrics.forEach(m => {
+    new Chart(document.getElementById(`dc_${m.key}`), {
+      type:'line',
+      data:{ labels, datasets:[{ data:m.data, borderColor:m.color, backgroundColor:m.color+'22', tension:.4, fill:true, pointRadius:0, borderWidth:1.5 }] },
+      options:{ animation:false, plugins:{legend:{display:false}}, scales:{ y:{min:0,grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10}}}, x:{grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10},maxTicksLimit:6}} } }
+    });
+  });
+}
+
+function switchNode(nodeId) {
+  selectedNode = nodeId;
+  [cpuCD, memCD, diskCD, netCD].forEach(cd => { cd.labels=[]; cd.datasets[0].data=[]; });
+  Object.values(chartDefs).forEach(c => c && c.update());
+  const sel = document.getElementById('nodeSelectMetric');
+  if (sel) sel.value = nodeId;
+}
+
+// ── Metrics history view ──────────────────────────────────────────────────
+function populateMetricNodeSelect() {
+  const sel = document.getElementById('metricNodeSelect');
+  if (sel && allNodes.length && sel.options.length <= 1) {
+    allNodes.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = n.id; opt.textContent = n.hostname || n.id;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+async function loadMetricHistory() {
+  const nodeId  = document.getElementById('metricNodeSelect')?.value;
+  const minutes = document.getElementById('metricRange')?.value || 60;
+  const el = document.getElementById('metricHistoryCharts');
+  if (!nodeId) { el.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px">Select a node</div>'; return; }
+
+  el.innerHTML = '<div class="loading" style="grid-column:1/-1">Loading…</div>';
+  const r = await fetch(`${API}/api/nodes/${encodeURIComponent(nodeId)}/metrics?minutes=${minutes}`).then(r=>r.json()).catch(()=>null);
+  if (!r || !r.metrics.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px">No data in this range</div>'; return; }
+
+  const labels = r.metrics.map(m => new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+  const defs = [
+    { id:'mh_cpu',  label:'CPU %',      color:'#3b82f6', data:r.metrics.map(m=>m.cpu)    },
+    { id:'mh_mem',  label:'Memory %',   color:'#8b5cf6', data:r.metrics.map(m=>m.memory)  },
+    { id:'mh_disk', label:'Disk %',     color:'#f59e0b', data:r.metrics.map(m=>m.disk)    },
+    { id:'mh_load', label:'Load Avg 1m',color:'#06b6d4', data:r.metrics.map(m=>m.load)    },
+    { id:'mh_nsent',label:'Net Sent MB', color:'#10b981', data:r.metrics.map(m=>+(m.net_sent/1048576).toFixed(2)) },
+    { id:'mh_nrecv',label:'Net Recv MB', color:'#ef4444', data:r.metrics.map(m=>+(m.net_recv/1048576).toFixed(2)) },
+  ];
+  el.innerHTML = defs.map(d=>`<div class="chart-box"><div class="chart-box-title">${d.label}</div><canvas id="${d.id}"></canvas></div>`).join('');
+  defs.forEach(d => {
+    new Chart(document.getElementById(d.id), {
+      type:'line',
+      data:{ labels, datasets:[{ data:d.data, borderColor:d.color, backgroundColor:d.color+'22', tension:.4, fill:true, pointRadius:0, borderWidth:1.5 }] },
+      options:{ animation:false, plugins:{legend:{display:false}}, scales:{ y:{min:0,grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10}}}, x:{grid:{color:'#1a2d45'},ticks:{color:'#64748b',font:{size:10},maxTicksLimit:8}} } }
+    });
+  });
+}
+
+// ── Alerts ─────────────────────────────────────────────────────────────────
+async function loadAlerts() {
+  const r = await fetch(`${API}/api/alerts?resolved=false&limit=20`).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+
+  document.getElementById('alertCountBadge').textContent = r.alerts.length ? `${r.alerts.length} active` : '';
+
+  // Overview alert list
+  const el = document.getElementById('overviewAlertList');
+  if (!r.alerts.length) { el.innerHTML = '<div class="empty">No active alerts</div>'; return; }
+  el.innerHTML = r.alerts.map(a => `
+    <div class="alert-row">
+      <div class="alert-sev ${a.severity}"></div>
+      <div class="alert-body">
+        <div class="alert-title">${a.rule_name}</div>
+        <div class="alert-sub">${a.node_id} · ${a.message}</div>
+      </div>
+      <span class="badge ${a.severity}">${a.severity}</span>
+    </div>`).join('');
+}
+
+function setAlertFilter(f) {
+  alertFilter = f;
+  ['All','Crit','High','Medium','Resolved'].forEach(x => {
+    const b = document.getElementById('f'+x);
+    if (b) b.classList.remove('active');
+  });
+  const fMap = {all:'All',critical:'Crit',high:'High',medium:'Medium',resolved:'Resolved'};
+  const btn = document.getElementById('f'+(fMap[f]||'All'));
+  if (btn) btn.classList.add('active');
+  loadAlertsView();
+}
+
+async function loadAlertsView() {
+  const resolved = alertFilter === 'resolved';
+  let url = `${API}/api/alerts?resolved=${resolved}&limit=200`;
+  if (alertFilter && alertFilter !== 'all' && alertFilter !== 'resolved') url += `&severity=${alertFilter}`;
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  selectedAlerts.clear();
+  document.getElementById('alertResolveBar').style.display = 'none';
+
+  const tbody = document.getElementById('alertTableBody');
+  if (!r.alerts.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No alerts</td></tr>'; return; }
+  tbody.innerHTML = r.alerts.map(a => `
+    <tr>
+      <td><input type="checkbox" data-id="${a.id}" onchange="toggleAlertSelect(this,${a.id})"></td>
+      <td><span class="badge ${a.severity}">${a.severity}</span></td>
+      <td style="font-weight:600">${a.rule_name}</td>
+      <td style="color:var(--text2)">${a.node_id}</td>
+      <td style="color:var(--text3);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.message}</td>
+      <td style="color:var(--text3);white-space:nowrap">${new Date(a.ts).toLocaleString()}</td>
+      <td>${!a.resolved ? `<button class="resolve-btn" onclick="resolveSingle(${a.id})">Resolve</button>` : '<span style="color:var(--text3);font-size:11px">Resolved</span>'}</td>
+    </tr>`).join('');
+}
+
+function toggleAlertSelect(cb, id) {
+  if (cb.checked) selectedAlerts.add(id); else selectedAlerts.delete(id);
+  document.getElementById('alertResolveBar').style.display = selectedAlerts.size ? 'flex' : 'none';
+}
+
+function toggleSelectAll(cb) {
+  document.querySelectorAll('#alertTableBody input[type=checkbox]').forEach(box => {
+    box.checked = cb.checked;
+    const id = parseInt(box.dataset.id);
+    if (cb.checked) selectedAlerts.add(id); else selectedAlerts.delete(id);
+  });
+  document.getElementById('alertResolveBar').style.display = selectedAlerts.size ? 'flex' : 'none';
+}
+
+async function resolveSingle(id) {
+  await fetch(`${API}/api/alerts/resolve`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alert_ids:[id]})});
+  loadAlertsView(); loadStats(); updateBadges();
+}
+
+async function resolveSelected() {
+  if (!selectedAlerts.size) return;
+  await fetch(`${API}/api/alerts/resolve`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({alert_ids:[...selectedAlerts]})});
+  selectedAlerts.clear();
+  loadAlertsView(); loadStats(); updateBadges();
+}
+
+// ── Incidents ──────────────────────────────────────────────────────────────
+async function loadIncidentsOverview() {
+  const r = await fetch(`${API}/api/incidents?limit=5`).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  const el = document.getElementById('overviewIncidentList');
+  if (!r.incidents.length) { el.innerHTML = '<div class="empty">No incidents</div>'; return; }
+  el.innerHTML = r.incidents.map(i => renderIncidentItem(i)).join('');
+}
+
+async function loadIncidentsView() {
+  const status = document.getElementById('incidentStatusFilter')?.value || '';
+  let url = `${API}/api/incidents?limit=50`;
+  if (status) url += `&status=${status}`;
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  const el = document.getElementById('incidentListFull');
+  if (!r.incidents.length) { el.innerHTML = '<div class="empty">No incidents</div>'; return; }
+  el.innerHTML = r.incidents.map(i => renderIncidentItem(i)).join('');
+}
+
+function renderIncidentItem(i) {
+  const rca = i.rca || {};
+  const actions = rca.recommended_actions || [];
+  const advice  = rca.stack_specific_advice || '';
+  const bridge  = i.bridge || {};
+
+  return `<div class="incident-item" id="inc_${i.id}" onclick="toggleIncident(${i.id})">
+    <div class="ii-header">
+      <span class="ii-title">INC-${i.id}: ${i.title}</span>
+      <span class="badge ${i.severity}">${i.severity}</span>
+      <span class="badge ${i.status}" style="margin-left:4px">${i.status}</span>
+    </div>
+    <div class="ii-meta">${i.node_id} · ${new Date(i.ts).toLocaleString()}</div>
+    <div class="ii-rca">
+      ${rca.root_cause ? `<div class="rca-row"><div class="rca-label">Root Cause</div><div class="rca-val">${rca.root_cause}</div></div>` : ''}
+      ${rca.blast_radius ? `<div class="rca-row"><div class="rca-label">Blast Radius</div><div class="rca-val">${rca.blast_radius}</div></div>` : ''}
+      ${rca.confidence ? `<div class="rca-row"><div class="rca-label">Confidence</div><div class="rca-val">${Math.round(rca.confidence*100)}%</div></div>` : ''}
+      ${actions.length ? `
+        <div class="rca-actions">
+          <div class="rca-action-title">Recommended Actions</div>
+          ${actions.map((a,idx) => `<div class="action-step"><div class="action-num">${idx+1}</div><div>${a}</div></div>`).join('')}
+        </div>` : ''}
+      ${advice ? `<div class="rca-row" style="margin-top:10px"><div class="rca-label">Stack Advice</div><div class="rca-val" style="font-family:monospace;font-size:11px">${advice}</div></div>` : ''}
+      ${i.routed_teams?.length ? `<div class="team-tags">${i.routed_teams.map(t=>`<span class="team-tag">${t}</span>`).join('')}</div>` : ''}
+      ${bridge.bridged ? `<div class="bridge-info">✓ War room bridged — ${bridge.channels?.join(', ') || 'channels notified'}</div>` : ''}
+      <div style="margin-top:10px">
+        <button class="filter-btn" onclick="event.stopPropagation();triggerBridge(${i.id})">↗ Re-bridge Teams</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleIncident(id) {
+  const el = document.getElementById(`inc_${id}`);
+  el.classList.toggle('expanded');
+}
+
+async function triggerBridge(id) {
+  await fetch(`${API}/api/incidents/${id}/bridge`, {method:'POST'});
+  showToast('incident', `INC-${id}`, 'Bridge re-triggered');
+}
+
+// ── Events ────────────────────────────────────────────────────────────────
+const EVENT_ICONS = {
+  auth_failure:'🔐', port_scan:'🔍', suspicious_process:'☠',
+  oom_kill:'💀', segfault:'⚡', process_exit:'💥'
+};
+
+async function loadEventsView() {
+  const nodeId = document.getElementById('eventNodeFilter')?.value || '';
+  let url = `${API}/api/events?limit=100`;
+  if (nodeId) url += `&node_id=${encodeURIComponent(nodeId)}`;
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  const el = document.getElementById('eventListFull');
+  if (!r.events.length) { el.innerHTML = '<div class="empty">No events</div>'; return; }
+  el.innerHTML = r.events.map(e => `
+    <div class="event-row">
+      <div class="event-icon ${e.type||'default'}">${EVENT_ICONS[e.type]||'◈'}</div>
+      <div class="event-body">
+        <div class="event-msg">${e.message}</div>
+        <div class="event-meta">${e.node_id} · ${e.type} · ${new Date(e.ts).toLocaleString()}</div>
+      </div>
+      <span class="badge ${e.severity||'info'}">${e.severity||'info'}</span>
+    </div>`).join('');
+}
+
+// ── Badges ────────────────────────────────────────────────────────────────
+async function updateBadges() {
+  const r = await fetch(`${API}/api/stats`).then(r=>r.json()).catch(()=>null);
+  if (!r) return;
+  const ab = document.getElementById('sbAlertBadge');
+  const ib = document.getElementById('sbIncidentBadge');
+  if (r.open_alerts > 0) { ab.style.display=''; ab.textContent=r.open_alerts; } else ab.style.display='none';
+  if (r.open_incidents > 0) { ib.style.display=''; ib.textContent=r.open_incidents; } else ib.style.display='none';
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(type, title, body) {
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast-item ${type}`;
+  el.innerHTML = `<div style="font-weight:700;font-size:13px">${title}</div>
+    ${body ? `<div style="color:var(--text2);font-size:12px;margin-top:4px;line-height:1.4">${body}</div>` : ''}`;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 8000);
+  if (c.children.length > 5) c.removeChild(c.firstChild);
+}
+</script>
+</body>
+</html>
