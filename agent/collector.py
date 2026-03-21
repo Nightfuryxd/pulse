@@ -21,6 +21,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+sys.path.insert(0, str(Path(__file__).parent))
+
 import httpx
 import psutil
 from dotenv import load_dotenv
@@ -31,10 +33,14 @@ API_URL          = os.getenv("PULSE_API_URL", "http://localhost:8000")
 NODE_ID          = os.getenv("NODE_ID") or socket.gethostname()
 COLLECT_INTERVAL = int(os.getenv("COLLECT_INTERVAL", "10"))
 LOG_PATHS        = os.getenv("LOG_PATHS", "/var/log/syslog,/var/log/auth.log").split(",")
-SNMP_TARGETS     = os.getenv("SNMP_TARGETS", "").split(",")  # comma-separated IPs/ranges
-SSH_TARGETS      = os.getenv("SSH_TARGETS", "").split(",")   # user@host,user@host2
+SNMP_TARGETS     = os.getenv("SNMP_TARGETS", "").split(",")
+SSH_TARGETS      = os.getenv("SSH_TARGETS", "").split(",")
 ENABLE_DISCOVERY = os.getenv("ENABLE_DISCOVERY", "false").lower() == "true"
-NETWORK_RANGE    = os.getenv("NETWORK_RANGE", "")            # e.g. 192.168.1.0/24
+NETWORK_RANGE    = os.getenv("NETWORK_RANGE", "")
+ENABLE_K8S       = os.getenv("ENABLE_K8S", "false").lower() == "true"
+ENABLE_AWS       = os.getenv("ENABLE_AWS", "false").lower() == "true"
+ENABLE_AZURE     = os.getenv("ENABLE_AZURE", "false").lower() == "true"
+ENABLE_GCP       = os.getenv("ENABLE_GCP", "false").lower() == "true"
 
 SYSTEM  = platform.system()   # "Linux", "Darwin", "Windows"
 HOSTNAME = socket.gethostname()
@@ -742,6 +748,28 @@ async def main():
                     ssh_results = await collect_ssh_targets(ssh_targets)
                     for m in ssh_results:
                         await ship_metrics(http, m)
+
+                # ── Kubernetes ─────────────────────────────────────────────
+                if ENABLE_K8S:
+                    try:
+                        sys.path.insert(0, str(Path(__file__).parent))
+                        from cloud.kubernetes import collect_all as k8s_collect_all
+                        k8s_data = await k8s_collect_all()
+                        await ship_metrics(http, k8s_data["metric"])
+                        await ship_events(http, k8s_data["events"])
+                    except Exception as e:
+                        print(f"[Agent] K8s error: {e}")
+
+                # ── AWS ────────────────────────────────────────────────────
+                if ENABLE_AWS:
+                    try:
+                        from cloud.aws import collect_all as aws_collect_all
+                        aws_data = await aws_collect_all()
+                        for m in aws_data["metrics"]:
+                            await ship_metrics(http, m)
+                        await ship_events(http, aws_data["events"])
+                    except Exception as e:
+                        print(f"[Agent] AWS error: {e}")
 
                 # Summary log
                 total_nodes = 1 + len(snmp_targets) + len(ssh_targets)

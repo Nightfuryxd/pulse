@@ -41,6 +41,7 @@ services:
     volumes:
       - ./api:/app
       - ./config:/app/config
+      - ./dashboard:/app/../dashboard
     depends_on:
       postgres:
         condition: service_healthy

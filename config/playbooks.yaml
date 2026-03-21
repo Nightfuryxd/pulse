@@ -1,0 +1,164 @@
+# PULSE Auto-Remediation Playbooks
+# Each playbook defines: when to trigger + what steps to execute
+#
+# Trigger options (all optional, combined with AND):
+#   trigger_rule:      exact rule_id from rules.yaml
+#   trigger_category:  performance | security | network | etc.
+#   trigger_severity:  critical | high | medium | low  (or list)
+#   trigger_pattern:   regex matched against alert message
+#
+# Step actions:
+#   run_command       — SSH to the node and run a shell command
+#   restart_service   — SSH to the node and systemctl restart <service>
+#   run_local         — run a command on the PULSE server
+#   http_request      — call a webhook/API
+#   notify_slack      — send a Slack message
+#   notify_teams      — send a Teams message
+
+playbooks:
+
+  # ── Disk cleanup ────────────────────────────────────────────────────────────
+  - id: auto_disk_cleanup
+    name: "Auto Disk Cleanup"
+    trigger_rule: disk_high
+    trigger_severity: [critical, high]
+    description: "When disk is high, clean temp files and old logs"
+    steps:
+      - name: "Clear temp files"
+        action: run_command
+        command: "find /tmp -type f -mtime +7 -delete 2>/dev/null; find /var/tmp -type f -mtime +7 -delete 2>/dev/null; echo 'Temp cleaned'"
+
+      - name: "Rotate logs"
+        action: run_command
+        command: "logrotate -f /etc/logrotate.conf 2>/dev/null; journalctl --vacuum-time=7d 2>/dev/null; echo 'Logs rotated'"
+        continue_on_failure: true
+
+      - name: "Report new disk usage"
+        action: run_command
+        command: "df -h / | tail -1"
+
+      - name: "Notify team"
+        action: notify_slack
+        channel: "#infra-alerts"
+        message: "Auto-remediation: Ran disk cleanup on {node_id}. Cleared temp files + rotated logs."
+
+  # ── High memory — clear caches ───────────────────────────────────────────────
+  - id: auto_memory_flush
+    name: "Flush Memory Caches"
+    trigger_rule: memory_critical
+    trigger_severity: critical
+    description: "Drop page cache on critical memory pressure"
+    steps:
+      - name: "Drop page cache"
+        action: run_command
+        command: "sync && echo 3 > /proc/sys/vm/drop_caches && echo 'Cache dropped'"
+
+      - name: "Check memory"
+        action: run_command
+        command: "free -h | grep Mem"
+
+      - name: "Notify"
+        action: notify_slack
+        channel: "#infra-alerts"
+        message: "Auto-remediation: Flushed memory caches on {node_id}"
+
+  # ── Nginx high error rate — reload config ────────────────────────────────────
+  - id: nginx_reload
+    name: "Reload Nginx"
+    trigger_category: application
+    trigger_pattern: "nginx.*error"
+    steps:
+      - name: "Test nginx config"
+        action: run_command
+        command: "nginx -t 2>&1"
+
+      - name: "Reload nginx"
+        action: run_command
+        command: "systemctl reload nginx && echo 'Nginx reloaded'"
+
+      - name: "Notify"
+        action: notify_slack
+        channel: "#appdev-incidents"
+        message: "Auto-remediation: Reloaded nginx on {node_id} due to: {message}"
+
+  # ── PostgreSQL restart on crash ───────────────────────────────────────────────
+  - id: postgres_restart
+    name: "Restart PostgreSQL"
+    trigger_category: database
+    trigger_pattern: "postgres.*crash|database.*down|connection.*refused.*5432"
+    steps:
+      - name: "Check postgres status"
+        action: run_command
+        command: "systemctl status postgresql 2>&1 | head -10"
+
+      - name: "Restart postgres"
+        action: restart_service
+        service: postgresql
+        continue_on_failure: true
+
+      - name: "Verify connection"
+        action: run_command
+        command: "pg_isready -h localhost 2>&1"
+
+      - name: "Notify DBA team"
+        action: notify_slack
+        channel: "#dba-incidents"
+        message: "Auto-remediation: PostgreSQL restarted on {node_id}. Alert: {message}"
+
+  # ── Redis restart ─────────────────────────────────────────────────────────────
+  - id: redis_restart
+    name: "Restart Redis"
+    trigger_category: application
+    trigger_pattern: "redis.*down|redis.*connection refused|WRONGTYPE"
+    steps:
+      - name: "Restart redis"
+        action: restart_service
+        service: redis
+
+      - name: "Ping redis"
+        action: run_command
+        command: "redis-cli ping 2>&1"
+
+      - name: "Notify"
+        action: notify_slack
+        channel: "#appdev-incidents"
+        message: "Auto-remediation: Redis restarted on {node_id}"
+
+  # ── Security: block brute force IP ────────────────────────────────────────────
+  - id: block_brute_force
+    name: "Block Brute Force IP"
+    trigger_rule: auth_brute_force_critical
+    trigger_severity: critical
+    description: "Automatically block an IP doing SSH brute force"
+    steps:
+      - name: "Add iptables block"
+        action: run_command
+        command: "iptables -A INPUT -s {source_ip} -j DROP 2>/dev/null && echo 'IP blocked: {source_ip}'"
+
+      - name: "Persist rule"
+        action: run_command
+        command: "iptables-save > /etc/iptables/rules.v4 2>/dev/null || true"
+        continue_on_failure: true
+
+      - name: "Alert SecOps"
+        action: notify_slack
+        channel: "#secops-incidents"
+        message: "AUTO-BLOCKED: SSH brute force IP {source_ip} on {node_id} ({message}). Rule added to iptables."
+
+  # ── Custom webhook trigger ────────────────────────────────────────────────────
+  - id: webhook_alert
+    name: "Fire Custom Webhook"
+    trigger_severity: critical
+    description: "Call a custom webhook on any critical alert"
+    steps:
+      - name: "POST to webhook"
+        action: http_request
+        method: POST
+        url: "${REMEDIATION_WEBHOOK_URL}"
+        body:
+          node_id: "{node_id}"
+          rule:    "{rule_name}"
+          message: "{message}"
+          severity: "{severity}"
+          ts:      "{ts}"
+        continue_on_failure: true

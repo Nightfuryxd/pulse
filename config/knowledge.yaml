@@ -1,0 +1,134 @@
+# PULSE Company Knowledge Base
+# Add your team's runbooks, past incidents, and common fix guides here.
+# PULSE will automatically surface these during AI RCA.
+#
+# Entry fields:
+#   title:       short name for the issue
+#   type:        runbook | incident | alert_guide | config_note | escalation
+#   service:     which service this relates to (postgres, nginx, redis, etc.)
+#   tags:        comma-separated tags for search
+#   keywords:    list of terms that should boost this entry in search
+#   symptoms:    what you observe when this happens
+#   resolution:  the fix — can include code blocks
+#   playbook_id: link to a playbook in playbooks.yaml to auto-execute
+#   severity:    critical | high | medium | low
+
+knowledge:
+
+  - title: "Postgres Connection Pool Exhausted"
+    type: runbook
+    service: postgres
+    tags: database, postgres, connections, pool
+    keywords: [connection pool, too many connections, FATAL, remaining connection slots]
+    symptoms: |
+      Application logs show: "FATAL: remaining connection slots are reserved"
+      pg_stat_activity shows max_connections near limit.
+      App response times spike, then fail with 500.
+    resolution: |
+      1. Check current connections: SELECT count(*) FROM pg_stat_activity;
+      2. Kill idle connections: SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE state = 'idle' AND state_change < NOW() - INTERVAL '10 minutes';
+      3. If using PgBouncer — increase pool_size in pgbouncer.ini and reload
+      4. Long-term fix: increase max_connections in postgresql.conf and restart, or deploy PgBouncer
+      5. Check for connection leaks in app code (not closing connections)
+    playbook_id: postgres_restart
+
+  - title: "Redis OOM / maxmemory Eviction"
+    type: runbook
+    service: redis
+    tags: redis, memory, eviction, cache
+    keywords: [OOM, maxmemory, evicted_keys, NOEVICTION]
+    symptoms: |
+      Redis logs: "OOM command not allowed when used memory > 'maxmemory'"
+      Cache hit rate drops suddenly.
+      App starts returning stale or missing cache data.
+    resolution: |
+      1. Check memory: redis-cli INFO memory | grep used_memory_human
+      2. Check eviction policy: redis-cli CONFIG GET maxmemory-policy
+      3. If policy is 'noeviction', change to 'allkeys-lru': redis-cli CONFIG SET maxmemory-policy allkeys-lru
+      4. Identify big keys: redis-cli --bigkeys
+      5. Increase maxmemory or add more Redis nodes
+
+  - title: "Disk Full — /var/log overflow"
+    type: runbook
+    service: system
+    tags: disk, logs, storage, full
+    keywords: [disk full, no space left, /var/log, inode]
+    symptoms: |
+      df -h shows / or /var at 100%.
+      Applications can't write logs or temporary files.
+      Cron jobs and backups fail.
+    resolution: |
+      1. Find large files: du -sh /var/log/* | sort -rh | head -20
+      2. Truncate large log: > /var/log/syslog (preserves file descriptor)
+      3. Force logrotate: logrotate -f /etc/logrotate.conf
+      4. Clear journal: journalctl --vacuum-time=3d
+      5. Find hidden large files: lsof | grep deleted | awk '{print $7, $9}' | sort -rn | head
+      6. Long term: add logrotate rule or increase disk
+    playbook_id: auto_disk_cleanup
+
+  - title: "High CPU — runaway process"
+    type: runbook
+    service: system
+    tags: cpu, performance, process
+    keywords: [high cpu, 100% cpu, load average, runaway]
+    symptoms: |
+      CPU stays above 85% for extended period.
+      Load average > number of CPU cores.
+      System becomes sluggish.
+    resolution: |
+      1. Find top processes: ps aux --sort=-%cpu | head -10
+      2. Profile the top process: strace -p <pid> or perf top -p <pid>
+      3. For Java: jstack <pid> to find blocking thread
+      4. For Python: py-spy dump --pid <pid>
+      5. If it's a cron job: check /etc/cron.d, look for overlapping runs
+      6. If safe to restart: systemctl restart <service>
+
+  - title: "SSL Certificate Expiry"
+    type: alert_guide
+    service: nginx
+    tags: ssl, certificate, https, expiry
+    keywords: [certificate expired, ssl, tls, https, Let's Encrypt]
+    symptoms: |
+      HTTPS connections fail with certificate error.
+      Monitoring alerts on port 443.
+    resolution: |
+      1. Check expiry: echo | openssl s_client -connect <host>:443 2>/dev/null | openssl x509 -noout -dates
+      2. If Let's Encrypt: certbot renew --force-renewal
+      3. Reload nginx: systemctl reload nginx
+      4. If cert is from internal CA — contact your PKI team
+
+  - title: "Out of Memory Kill (OOM Kill)"
+    type: alert_guide
+    service: system
+    tags: oom, memory, kill, crash
+    keywords: [oom kill, out of memory, killed process, dmesg oom]
+    symptoms: |
+      Process disappears unexpectedly.
+      /var/log/kern.log or dmesg shows: "Out of memory: Kill process"
+    resolution: |
+      1. Check which process was killed: dmesg | grep -i "out of memory" | tail -20
+      2. Check memory pressure: free -h; vmstat 1 5
+      3. Identify memory hogs: ps aux --sort=-%mem | head -10
+      4. Check for memory leaks in application
+      5. Add swap: fallocate -l 4G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+      6. Set process memory limits via cgroups or ulimit
+
+  - title: "Escalation — Who to call"
+    type: escalation
+    service: all
+    tags: escalation, oncall, contact
+    keywords: [who to call, escalate, emergency, p0, p1]
+    resolution: |
+      P0 (System down):
+        - Primary: #secops-incidents Slack + PagerDuty
+        - On-call: Check PagerDuty schedule at pagerduty.com
+        - Escalation path: L1 (10min) → L2 (20min) → Engineering Manager (30min) → CTO (60min)
+
+      Database issues:
+        - DBA team: #dba-incidents
+        - Primary DBA: check team roster
+
+      Network/Security:
+        - NetOps: #netops-incidents
+        - SecOps: #secops-incidents
+        - For active breach: follow incident response playbook

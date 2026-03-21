@@ -1,0 +1,11 @@
+{
+  "name": "@pulse/sdk",
+  "version": "1.0.0",
+  "description": "PULSE Infrastructure Intelligence SDK for Node.js",
+  "main": "index.js",
+  "keywords": ["monitoring", "observability", "apm", "tracing", "logging"],
+  "license": "MIT",
+  "optionalDependencies": {
+    "uuid": "^9.0.0"
+  }
+}
