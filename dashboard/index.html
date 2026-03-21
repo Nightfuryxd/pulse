@@ -53,7 +53,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:52px;min-height:52px}
 .topbar-title{font-size:16px;font-weight:700;color:var(--text)}
 .topbar-right{display:flex;align-items:center;gap:16px}
-.clock{font-size:12px;color:var(--text3);font-variant-numeric:tabular-nums}
 .refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;transition:all .15s}
 .refresh-btn:hover{background:var(--surface3);color:var(--text)}
 
@@ -111,6 +110,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .nc-tag.snmp{background:#1e3a5f;color:var(--cyan)}
 .nc-tag.ssh{background:#1a3a2a;color:var(--green)}
 .nc-tag.local{background:#2d1a5f;color:var(--purple)}
+.nc-tag.aws{background:#2d1a10;color:#fb923c}
+.nc-tag.azure{background:#1a2050;color:#60a5fa}
+.nc-tag.gcp{background:#1a301a;color:#4ade80}
+.nc-tag.k8s{background:#1e2a50;color:#a78bfa}
 
 /* ── Charts ── */
 .chart-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:16px}
@@ -188,7 +191,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-s
 .data-table tr:hover td{background:var(--surface2)}
 
 /* ── Filters ── */
-.filter-bar{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.filter-bar{display:flex;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface2);flex-wrap:wrap}
 select,input{background:var(--surface3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;outline:none}
 select:focus,input:focus{border-color:var(--accent2)}
 .filter-btn{background:var(--surface3);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px}
@@ -216,6 +219,56 @@ select:focus,input:focus{border-color:var(--accent2)}
 /* ── Views ── */
 .view{display:none}
 .view.active{display:block}
+
+/* ── Topology canvas ── */
+#topoCanvas{display:block;width:100%;background:var(--surface2);cursor:grab}
+#topoCanvas:active{cursor:grabbing}
+.topo-legend{display:flex;gap:16px;padding:12px 16px;border-top:1px solid var(--border);flex-wrap:wrap}
+.topo-legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)}
+.topo-legend-dot{width:10px;height:10px;border-radius:50%}
+
+/* ── Log table ── */
+.log-level{font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;text-transform:uppercase;font-family:monospace}
+.log-level.error,.log-level.critical{background:#7f1d1d;color:#fca5a5}
+.log-level.warning,.log-level.warn{background:#78350f;color:#fde68a}
+.log-level.info{background:#1e3a5f;color:#93c5fd}
+.log-level.debug{background:#1e293b;color:#64748b}
+.log-msg{font-size:12px;font-family:monospace;max-width:500px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-trace{font-size:10px;color:var(--accent2);cursor:pointer;font-family:monospace}
+.log-trace:hover{text-decoration:underline}
+
+/* ── KB entries ── */
+.kb-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;transition:border-color .15s}
+.kb-card:hover{border-color:var(--border2)}
+.kb-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.kb-card-title{font-size:13px;font-weight:700;flex:1}
+.kb-card-body{font-size:12px;color:var(--text2);margin-top:8px;line-height:1.6}
+.kb-card-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.kb-tag{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--surface3);color:var(--text3);border:1px solid var(--border)}
+.kb-type{font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;text-transform:uppercase}
+.kb-type.runbook{background:#1e3a5f;color:#93c5fd}
+.kb-type.incident{background:#7f1d1d;color:#fca5a5}
+.kb-type.alert_guide{background:#78350f;color:#fde68a}
+.kb-type.config_note{background:#1a3a2a;color:#6ee7b7}
+.kb-type.escalation{background:#2d1a5f;color:#c4b5fd}
+.kb-actions{display:flex;gap:8px;margin-top:10px}
+
+/* ── Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:560px;max-width:90vw;max-height:80vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:16px}
+.form-group{margin-bottom:14px}
+.form-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block}
+.form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:12px;outline:none}
+.form-input:focus{border-color:var(--accent2)}
+textarea.form-input{resize:vertical;min-height:80px;font-family:monospace}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}
+.btn{padding:7px 18px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-secondary{background:var(--surface3);color:var(--text2);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--surface2)}
+.btn-danger{background:#7f1d1d;color:#fca5a5}
 </style>
 </head>
 <body>
@@ -252,6 +305,17 @@ select:focus,input:focus{border-color:var(--accent2)}
     <div class="sb-section">Observe</div>
     <div class="sb-item" onclick="showView('events')">
       <span class="sb-item-icon">◉</span><span class="sb-item-label">Event Feed</span>
+    </div>
+    <div class="sb-item" onclick="showView('topology')">
+      <span class="sb-item-icon">⬡</span><span class="sb-item-label">Topology</span>
+    </div>
+    <div class="sb-item" onclick="showView('logs')">
+      <span class="sb-item-icon">≡</span><span class="sb-item-label">Logs</span>
+    </div>
+    <div class="sb-section">Intelligence</div>
+    <div class="sb-item" onclick="showView('kb')">
+      <span class="sb-item-icon">◎</span><span class="sb-item-label">Knowledge Base</span>
+      <span id="sbKbCount" style="margin-left:auto;font-size:10px;color:var(--text3)"></span>
     </div>
   </nav>
   <div class="sb-footer">
@@ -295,9 +359,9 @@ select:focus,input:focus{border-color:var(--accent2)}
       <div class="stat-tile-sub">active war rooms</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">Events (1h)</div>
-      <div class="stat-tile-val" id="statEvents">—</div>
-      <div class="stat-tile-sub">security + system</div>
+      <div class="stat-tile-label">KB Entries</div>
+      <div class="stat-tile-val" id="statKb">—</div>
+      <div class="stat-tile-sub">runbooks + guides</div>
     </div>
     <div class="stat-tile">
       <div class="stat-tile-label">Dashboard Clients</div>
@@ -312,7 +376,6 @@ select:focus,input:focus{border-color:var(--accent2)}
     <div class="view active" id="view-overview">
       <div class="grid2 col-6-4">
         <div>
-          <!-- Multi-metric charts -->
           <div class="panel">
             <div class="ph">
               <div class="ph-title"><span class="ph-title-icon">◎</span> Live Metrics</div>
@@ -323,26 +386,12 @@ select:focus,input:focus{border-color:var(--accent2)}
               </div>
             </div>
             <div class="chart-grid">
-              <div class="chart-box">
-                <div class="chart-box-title">CPU %</div>
-                <canvas id="cpuChart"></canvas>
-              </div>
-              <div class="chart-box">
-                <div class="chart-box-title">Memory %</div>
-                <canvas id="memChart"></canvas>
-              </div>
-              <div class="chart-box">
-                <div class="chart-box-title">Disk %</div>
-                <canvas id="diskChart"></canvas>
-              </div>
-              <div class="chart-box">
-                <div class="chart-box-title">Network (KB/s recv)</div>
-                <canvas id="netChart"></canvas>
-              </div>
+              <div class="chart-box"><div class="chart-box-title">CPU %</div><canvas id="cpuChart"></canvas></div>
+              <div class="chart-box"><div class="chart-box-title">Memory %</div><canvas id="memChart"></canvas></div>
+              <div class="chart-box"><div class="chart-box-title">Disk %</div><canvas id="diskChart"></canvas></div>
+              <div class="chart-box"><div class="chart-box-title">Network (KB/s recv)</div><canvas id="netChart"></canvas></div>
             </div>
           </div>
-
-          <!-- Recent alerts -->
           <div class="panel" style="margin-top:16px">
             <div class="ph">
               <div class="ph-title"><span class="ph-title-icon">◬</span> Active Alerts</div>
@@ -356,9 +405,7 @@ select:focus,input:focus{border-color:var(--accent2)}
             </div>
           </div>
         </div>
-
         <div>
-          <!-- Nodes sidebar -->
           <div class="panel">
             <div class="ph">
               <div class="ph-title"><span class="ph-title-icon">◈</span> Nodes</div>
@@ -370,8 +417,6 @@ select:focus,input:focus{border-color:var(--accent2)}
               <div class="empty">No nodes reporting</div>
             </div>
           </div>
-
-          <!-- Recent incidents -->
           <div class="panel" style="margin-top:16px">
             <div class="ph">
               <div class="ph-title"><span class="ph-title-icon">⚡</span> Recent Incidents</div>
@@ -396,6 +441,10 @@ select:focus,input:focus{border-color:var(--accent2)}
               <option value="local">Local Agent</option>
               <option value="snmp">SNMP</option>
               <option value="ssh">SSH Agentless</option>
+              <option value="aws">AWS</option>
+              <option value="azure">Azure</option>
+              <option value="gcp">GCP</option>
+              <option value="k8s">Kubernetes</option>
             </select>
           </div>
         </div>
@@ -403,8 +452,6 @@ select:focus,input:focus{border-color:var(--accent2)}
           <div class="empty" style="grid-column:1/-1">Loading nodes…</div>
         </div>
       </div>
-
-      <!-- Node detail (shown when a node is selected) -->
       <div class="panel" id="nodeDetailPanel" style="margin-top:16px;display:none">
         <div class="ph">
           <div class="ph-title" id="nodeDetailTitle">Node Detail</div>
@@ -480,9 +527,7 @@ select:focus,input:focus{border-color:var(--accent2)}
             </select>
           </div>
         </div>
-        <div id="incidentListFull">
-          <div class="empty">Loading…</div>
-        </div>
+        <div id="incidentListFull"><div class="empty">Loading…</div></div>
       </div>
     </div>
 
@@ -497,7 +542,117 @@ select:focus,input:focus{border-color:var(--accent2)}
             </select>
           </div>
         </div>
-        <div id="eventListFull">
+        <div id="eventListFull"><div class="empty">Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: TOPOLOGY ══ -->
+    <div class="view" id="view-topology">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">⬡</span> Service Topology</div>
+          <div class="ph-right">
+            <button class="filter-btn" onclick="resetTopology()">Reset View</button>
+            <button class="filter-btn" onclick="loadTopology()">↺ Refresh</button>
+          </div>
+        </div>
+        <canvas id="topoCanvas" height="520"></canvas>
+        <div class="topo-legend">
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#3b82f6"></div> Local/Agent</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#06b6d4"></div> SNMP Device</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#10b981"></div> SSH Agentless</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#fb923c"></div> AWS</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#60a5fa"></div> Azure</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#4ade80"></div> GCP</div>
+          <div class="topo-legend-item"><div class="topo-legend-dot" style="background:#a78bfa"></div> Kubernetes</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">≡</span> Service Edges</div>
+        </div>
+        <div id="topoEdgeTable">
+          <table class="data-table">
+            <thead><tr><th>Source Node</th><th>Service</th><th>→ Destination</th><th>Service</th><th>Protocol</th><th>Connections</th></tr></thead>
+            <tbody id="topoEdgeBody"><tr><td colspan="6" class="loading">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: LOGS ══ -->
+    <div class="view" id="view-logs">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">≡</span> Log Stream</div>
+          <div class="ph-right">
+            <button class="filter-btn" onclick="loadLogsView()">↺ Refresh</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <select id="logNodeFilter" onchange="loadLogsView()">
+            <option value="">All Nodes</option>
+          </select>
+          <select id="logServiceFilter" onchange="loadLogsView()">
+            <option value="">All Services</option>
+          </select>
+          <select id="logLevelFilter" onchange="loadLogsView()">
+            <option value="">All Levels</option>
+            <option value="critical">Critical</option>
+            <option value="error">Error</option>
+            <option value="warning">Warning</option>
+            <option value="info">Info</option>
+            <option value="debug">Debug</option>
+          </select>
+          <input id="logSearch" type="text" placeholder="Search messages…" style="flex:1;min-width:160px" oninput="debounceLogSearch()">
+          <input id="logTraceSearch" type="text" placeholder="Trace ID…" style="width:200px" onkeydown="if(event.key==='Enter')searchByTrace()">
+          <button class="filter-btn active" onclick="searchByTrace()">Trace</button>
+        </div>
+        <div id="logTableWrap" style="overflow-x:auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:140px">Time</th>
+                <th style="width:90px">Level</th>
+                <th style="width:120px">Node</th>
+                <th style="width:120px">Service</th>
+                <th>Message</th>
+                <th style="width:120px">Trace ID</th>
+              </tr>
+            </thead>
+            <tbody id="logTableBody"><tr><td colspan="6" class="loading">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px">
+          <button class="filter-btn" onclick="logPage=Math.max(0,logPage-1);loadLogsView()" id="logPrevBtn">← Prev</button>
+          <span id="logPageInfo" style="font-size:12px;color:var(--text3)">Page 1</span>
+          <button class="filter-btn" onclick="logPage++;loadLogsView()" id="logNextBtn">Next →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: KNOWLEDGE BASE ══ -->
+    <div class="view" id="view-kb">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◎</span> Knowledge Base</div>
+          <div class="ph-right">
+            <button class="filter-btn" onclick="openKbImportModal()">↑ Import Markdown</button>
+            <button class="filter-btn active" onclick="openKbAddModal()">+ Add Entry</button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <input id="kbSearch" type="text" placeholder="Search knowledge base…" style="flex:1;min-width:200px" oninput="debounceKbSearch()">
+          <select id="kbTypeFilter" onchange="loadKbView()">
+            <option value="">All Types</option>
+            <option value="runbook">Runbook</option>
+            <option value="incident">Incident</option>
+            <option value="alert_guide">Alert Guide</option>
+            <option value="config_note">Config Note</option>
+            <option value="escalation">Escalation</option>
+          </select>
+        </div>
+        <div class="pb" id="kbEntryList">
           <div class="empty">Loading…</div>
         </div>
       </div>
@@ -508,6 +663,60 @@ select:focus,input:focus{border-color:var(--accent2)}
 
 <div class="toast" id="toastContainer"></div>
 
+<!-- KB Add Modal -->
+<div class="modal-overlay" id="kbAddModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-title">Add Knowledge Base Entry</div>
+    <div class="form-group">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="kbNewTitle" placeholder="e.g. Postgres connection pool exhaustion">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Type</label>
+      <select class="form-input" id="kbNewType">
+        <option value="runbook">Runbook</option>
+        <option value="incident">Incident</option>
+        <option value="alert_guide">Alert Guide</option>
+        <option value="config_note">Config Note</option>
+        <option value="escalation">Escalation</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Content</label>
+      <textarea class="form-input" id="kbNewContent" placeholder="Write the runbook content, steps, or notes…" rows="6"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tags (comma-separated)</label>
+      <input class="form-input" id="kbNewTags" placeholder="e.g. postgres, database, connections">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="document.getElementById('kbAddModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="saveKbEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- KB Import Modal -->
+<div class="modal-overlay" id="kbImportModal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-title">Import Markdown Runbook</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+      Paste a structured Markdown runbook. Format:<br>
+      <code style="background:var(--surface2);padding:2px 6px;border-radius:4px"># Title</code>
+      followed by sections like <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">## Steps</code>,
+      <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">## Tags</code>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Markdown Content</label>
+      <textarea class="form-input" id="kbImportContent" placeholder="# Runbook Title&#10;&#10;## Overview&#10;What this runbook addresses...&#10;&#10;## Steps&#10;1. Check ...&#10;2. Restart ...&#10;&#10;## Tags&#10;postgres, database" rows="12"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="document.getElementById('kbImportModal').style.display='none'">Cancel</button>
+      <button class="btn btn-primary" onclick="importMarkdown()">Import</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API = window.location.origin;
 const WS  = `${API.replace('http','ws')}/ws/live`;
@@ -516,20 +725,17 @@ const WS  = `${API.replace('http','ws')}/ws/live`;
 let ws, selectedNode = '';
 let allNodes    = [];
 let alertFilter = 'all';
-let lastNetRecv = {};
 let prevNetRecv = {};
 let selectedAlerts = new Set();
+let logPage  = 0;
+const LOG_PAGE_SIZE = 100;
+let _logDebounce, _kbDebounce;
+let _topoAnim, _topoNodes = [], _topoEdges = [];
+let _dragNode = null, _dragOffX = 0, _dragOffY = 0;
+let _panX = 0, _panY = 0, _panStart = null;
 
 // ── Chart instances ──────────────────────────────────────────────────────
 const chartDefs = { cpu: null, mem: null, disk: null, net: null };
-const chartData = {
-  labels: [],
-  cpu:  { data:[], color:'#3b82f6' },
-  mem:  { data:[], color:'#8b5cf6' },
-  disk: { data:[], color:'#f59e0b' },
-  net:  { data:[], color:'#06b6d4' },
-};
-
 function makeChartData(color) {
   return {
     labels: [],
@@ -537,12 +743,10 @@ function makeChartData(color) {
       tension:.4, fill:true, pointRadius:0, borderWidth:1.5 }]
   };
 }
-
-const cpuCD   = makeChartData('#3b82f6');
-const memCD   = makeChartData('#8b5cf6');
-const diskCD  = makeChartData('#f59e0b');
-const netCD   = makeChartData('#06b6d4');
-
+const cpuCD  = makeChartData('#3b82f6');
+const memCD  = makeChartData('#8b5cf6');
+const diskCD = makeChartData('#f59e0b');
+const netCD  = makeChartData('#06b6d4');
 const chartOpts = (yLabel='%',yMax=100) => ({
   animation:false,
   plugins:{legend:{display:false}},
@@ -562,6 +766,7 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('clock').textContent = new Date().toUTCString().replace('GMT','UTC').slice(0,-4);
   }, 1000);
 
+  setupTopoCanvas();
   connectWS();
   loadAll();
   setInterval(loadAll, 10000);
@@ -590,18 +795,14 @@ function connectWS() {
 function handleMetricWS(msg) {
   const d = msg.data;
   if (selectedNode && d.node_id !== selectedNode) return;
-
   const ts = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   [cpuCD, memCD, diskCD, netCD].forEach(cd => {
     cd.labels.push(ts);
     if (cd.labels.length > 60) cd.labels.shift();
   });
-
-  // Net KB/s delta
   const prevR = prevNetRecv[d.node_id] || d.net_bytes_recv;
   const kbps  = Math.max(0, Math.round((d.net_bytes_recv - prevR) / 10 / 1024));
   prevNetRecv[d.node_id] = d.net_bytes_recv;
-
   [cpuCD.datasets[0].data, memCD.datasets[0].data, diskCD.datasets[0].data, netCD.datasets[0].data].forEach(arr => {
     if (arr.length > 60) arr.shift();
   });
@@ -609,7 +810,6 @@ function handleMetricWS(msg) {
   memCD.datasets[0].data.push(d.memory_percent);
   diskCD.datasets[0].data.push(d.disk_percent);
   netCD.datasets[0].data.push(kbps);
-
   Object.values(chartDefs).forEach(c => c && c.update());
   loadNodes();
 }
@@ -629,7 +829,8 @@ function handleIncidentWS(msg) {
 // ── Views ──────────────────────────────────────────────────────────────────
 const viewTitles = {
   overview:'Overview', nodes:'Nodes', metrics:'Metric History',
-  alerts:'Alerts', incidents:'Incidents', events:'Event Feed'
+  alerts:'Alerts', incidents:'Incidents', events:'Event Feed',
+  topology:'Service Topology', logs:'Log Stream', kb:'Knowledge Base'
 };
 
 function showView(name) {
@@ -637,7 +838,7 @@ function showView(name) {
   document.getElementById(`view-${name}`).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(i => i.classList.remove('active'));
   document.querySelectorAll('.sb-item').forEach(i => {
-    if (i.getAttribute('onclick')?.includes(name)) i.classList.add('active');
+    if (i.getAttribute('onclick')?.includes(`'${name}'`)) i.classList.add('active');
   });
   document.getElementById('topbarTitle').textContent = viewTitles[name] || name;
   if (name === 'alerts')    loadAlertsView();
@@ -645,6 +846,9 @@ function showView(name) {
   if (name === 'events')    loadEventsView();
   if (name === 'nodes')     renderNodeCards();
   if (name === 'metrics')   populateMetricNodeSelect();
+  if (name === 'topology')  loadTopology();
+  if (name === 'logs')      loadLogsView();
+  if (name === 'kb')        loadKbView();
 }
 
 // ── Load all data ──────────────────────────────────────────────────────────
@@ -660,18 +864,17 @@ async function loadStats() {
   document.getElementById('statAlerts').textContent   = r.open_alerts;
   document.getElementById('statCritical').textContent = r.critical_alerts;
   document.getElementById('statIncidents').textContent= r.open_incidents;
+  document.getElementById('statKb').textContent       = r.kb_entries ?? '—';
   document.getElementById('statClients').textContent  = r.connected_clients;
+  if (r.kb_entries != null) document.getElementById('sbKbCount').textContent = r.kb_entries;
 }
 
 async function loadNodes() {
   const r = await fetch(`${API}/api/nodes`).then(r=>r.json()).catch(()=>null);
   if (!r) return;
   allNodes = r.nodes;
-
   document.getElementById('nodeCountLabel').textContent = `${r.nodes.length} nodes`;
-
-  // Update select dropdowns
-  ['nodeSelectMetric','metricNodeSelect','eventNodeFilter'].forEach(id => {
+  ['nodeSelectMetric','metricNodeSelect','eventNodeFilter','logNodeFilter'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const existing = [...sel.options].map(o=>o.value);
@@ -683,18 +886,18 @@ async function loadNodes() {
       }
     });
   });
-
-  // Side node list (overview)
   renderSideNodeList(r.nodes);
-  // Node card grid (nodes view)
   if (document.getElementById('view-nodes').classList.contains('active')) renderNodeCards();
-  // Event stats
-  document.getElementById('statEvents').textContent = '—';
 }
 
 function nodeType(n) {
-  if (n.id.startsWith('snmp:')) return 'snmp';
-  if (n.id.startsWith('ssh:'))  return 'ssh';
+  const id = n.id || '';
+  if (id.startsWith('snmp:')) return 'snmp';
+  if (id.startsWith('ssh:'))  return 'ssh';
+  if (id.startsWith('aws:'))  return 'aws';
+  if (id.startsWith('azure:'))return 'azure';
+  if (id.startsWith('gcp:'))  return 'gcp';
+  if (id.startsWith('k8s:'))  return 'k8s';
   return 'local';
 }
 
@@ -718,10 +921,10 @@ function renderSideNodeList(nodes) {
     const m = n.latest_metric || {};
     const h = nodeHealth(m);
     const type = nodeType(n);
-    return `<div class="node-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="switchNode('${n.id}')">
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer" onclick="switchNode('${n.id}')">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.hostname}</div>
-        <div style="font-size:11px;color:var(--text3)">${n.ip} · <span class="badge ${type}" style="font-size:9px">${type.toUpperCase()}</span></div>
+        <div style="font-size:11px;color:var(--text3)">${n.ip} · <span class="nc-tag ${type}" style="margin-top:0">${type.toUpperCase()}</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-left:10px;font-size:12px">
         <span style="color:${h==='crit'?'var(--red)':h==='warn'?'var(--yellow)':'var(--green)'}">${(m.cpu_percent||0).toFixed(0)}%</span>
@@ -779,17 +982,15 @@ async function loadNodeDetailCharts(nodeId) {
   el.innerHTML = '<div class="empty" style="grid-column:1/-1">Loading…</div>';
   const r = await fetch(`${API}/api/nodes/${encodeURIComponent(nodeId)}/metrics?minutes=60`).then(r=>r.json()).catch(()=>null);
   if (!r || !r.metrics.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">No history</div>'; return; }
-
   const labels = r.metrics.map(m => new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
-  const metrics = [
-    { key:'cpu',   label:'CPU %',      color:'#3b82f6', data: r.metrics.map(m=>m.cpu)  },
-    { key:'mem',   label:'Memory %',   color:'#8b5cf6', data: r.metrics.map(m=>m.memory) },
-    { key:'disk',  label:'Disk %',     color:'#f59e0b', data: r.metrics.map(m=>m.disk)  },
-    { key:'load',  label:'Load Avg',   color:'#06b6d4', data: r.metrics.map(m=>m.load)  },
+  const defs = [
+    { key:'cpu',  label:'CPU %',    color:'#3b82f6', data: r.metrics.map(m=>m.cpu)    },
+    { key:'mem',  label:'Memory %', color:'#8b5cf6', data: r.metrics.map(m=>m.memory) },
+    { key:'disk', label:'Disk %',   color:'#f59e0b', data: r.metrics.map(m=>m.disk)   },
+    { key:'load', label:'Load Avg', color:'#06b6d4', data: r.metrics.map(m=>m.load)   },
   ];
-
-  el.innerHTML = metrics.map(m => `<div class="chart-box"><div class="chart-box-title">${m.label}</div><canvas id="dc_${m.key}"></canvas></div>`).join('');
-  metrics.forEach(m => {
+  el.innerHTML = defs.map(m => `<div class="chart-box"><div class="chart-box-title">${m.label}</div><canvas id="dc_${m.key}"></canvas></div>`).join('');
+  defs.forEach(m => {
     new Chart(document.getElementById(`dc_${m.key}`), {
       type:'line',
       data:{ labels, datasets:[{ data:m.data, borderColor:m.color, backgroundColor:m.color+'22', tension:.4, fill:true, pointRadius:0, borderWidth:1.5 }] },
@@ -823,19 +1024,17 @@ async function loadMetricHistory() {
   const minutes = document.getElementById('metricRange')?.value || 60;
   const el = document.getElementById('metricHistoryCharts');
   if (!nodeId) { el.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px">Select a node</div>'; return; }
-
   el.innerHTML = '<div class="loading" style="grid-column:1/-1">Loading…</div>';
   const r = await fetch(`${API}/api/nodes/${encodeURIComponent(nodeId)}/metrics?minutes=${minutes}`).then(r=>r.json()).catch(()=>null);
   if (!r || !r.metrics.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:40px">No data in this range</div>'; return; }
-
   const labels = r.metrics.map(m => new Date(m.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
   const defs = [
-    { id:'mh_cpu',  label:'CPU %',      color:'#3b82f6', data:r.metrics.map(m=>m.cpu)    },
-    { id:'mh_mem',  label:'Memory %',   color:'#8b5cf6', data:r.metrics.map(m=>m.memory)  },
-    { id:'mh_disk', label:'Disk %',     color:'#f59e0b', data:r.metrics.map(m=>m.disk)    },
-    { id:'mh_load', label:'Load Avg 1m',color:'#06b6d4', data:r.metrics.map(m=>m.load)    },
-    { id:'mh_nsent',label:'Net Sent MB', color:'#10b981', data:r.metrics.map(m=>+(m.net_sent/1048576).toFixed(2)) },
-    { id:'mh_nrecv',label:'Net Recv MB', color:'#ef4444', data:r.metrics.map(m=>+(m.net_recv/1048576).toFixed(2)) },
+    { id:'mh_cpu',   label:'CPU %',       color:'#3b82f6', data:r.metrics.map(m=>m.cpu)    },
+    { id:'mh_mem',   label:'Memory %',    color:'#8b5cf6', data:r.metrics.map(m=>m.memory) },
+    { id:'mh_disk',  label:'Disk %',      color:'#f59e0b', data:r.metrics.map(m=>m.disk)   },
+    { id:'mh_load',  label:'Load Avg 1m', color:'#06b6d4', data:r.metrics.map(m=>m.load)   },
+    { id:'mh_nsent', label:'Net Sent MB',  color:'#10b981', data:r.metrics.map(m=>+(m.net_sent/1048576).toFixed(2)) },
+    { id:'mh_nrecv', label:'Net Recv MB',  color:'#ef4444', data:r.metrics.map(m=>+(m.net_recv/1048576).toFixed(2)) },
   ];
   el.innerHTML = defs.map(d=>`<div class="chart-box"><div class="chart-box-title">${d.label}</div><canvas id="${d.id}"></canvas></div>`).join('');
   defs.forEach(d => {
@@ -851,10 +1050,7 @@ async function loadMetricHistory() {
 async function loadAlerts() {
   const r = await fetch(`${API}/api/alerts?resolved=false&limit=20`).then(r=>r.json()).catch(()=>null);
   if (!r) return;
-
   document.getElementById('alertCountBadge').textContent = r.alerts.length ? `${r.alerts.length} active` : '';
-
-  // Overview alert list
   const el = document.getElementById('overviewAlertList');
   if (!r.alerts.length) { el.innerHTML = '<div class="empty">No active alerts</div>'; return; }
   el.innerHTML = r.alerts.map(a => `
@@ -888,7 +1084,6 @@ async function loadAlertsView() {
   if (!r) return;
   selectedAlerts.clear();
   document.getElementById('alertResolveBar').style.display = 'none';
-
   const tbody = document.getElementById('alertTableBody');
   if (!r.alerts.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No alerts</td></tr>'; return; }
   tbody.innerHTML = r.alerts.map(a => `
@@ -954,7 +1149,6 @@ function renderIncidentItem(i) {
   const actions = rca.recommended_actions || [];
   const advice  = rca.stack_specific_advice || '';
   const bridge  = i.bridge || {};
-
   return `<div class="incident-item" id="inc_${i.id}" onclick="toggleIncident(${i.id})">
     <div class="ii-header">
       <span class="ii-title">INC-${i.id}: ${i.title}</span>
@@ -966,11 +1160,7 @@ function renderIncidentItem(i) {
       ${rca.root_cause ? `<div class="rca-row"><div class="rca-label">Root Cause</div><div class="rca-val">${rca.root_cause}</div></div>` : ''}
       ${rca.blast_radius ? `<div class="rca-row"><div class="rca-label">Blast Radius</div><div class="rca-val">${rca.blast_radius}</div></div>` : ''}
       ${rca.confidence ? `<div class="rca-row"><div class="rca-label">Confidence</div><div class="rca-val">${Math.round(rca.confidence*100)}%</div></div>` : ''}
-      ${actions.length ? `
-        <div class="rca-actions">
-          <div class="rca-action-title">Recommended Actions</div>
-          ${actions.map((a,idx) => `<div class="action-step"><div class="action-num">${idx+1}</div><div>${a}</div></div>`).join('')}
-        </div>` : ''}
+      ${actions.length ? `<div class="rca-actions"><div class="rca-action-title">Recommended Actions</div>${actions.map((a,idx)=>`<div class="action-step"><div class="action-num">${idx+1}</div><div>${a}</div></div>`).join('')}</div>` : ''}
       ${advice ? `<div class="rca-row" style="margin-top:10px"><div class="rca-label">Stack Advice</div><div class="rca-val" style="font-family:monospace;font-size:11px">${advice}</div></div>` : ''}
       ${i.routed_teams?.length ? `<div class="team-tags">${i.routed_teams.map(t=>`<span class="team-tag">${t}</span>`).join('')}</div>` : ''}
       ${bridge.bridged ? `<div class="bridge-info">✓ War room bridged — ${bridge.channels?.join(', ') || 'channels notified'}</div>` : ''}
@@ -982,8 +1172,7 @@ function renderIncidentItem(i) {
 }
 
 function toggleIncident(id) {
-  const el = document.getElementById(`inc_${id}`);
-  el.classList.toggle('expanded');
+  document.getElementById(`inc_${id}`)?.classList.toggle('expanded');
 }
 
 async function triggerBridge(id) {
@@ -1024,6 +1213,482 @@ async function updateBadges() {
   const ib = document.getElementById('sbIncidentBadge');
   if (r.open_alerts > 0) { ab.style.display=''; ab.textContent=r.open_alerts; } else ab.style.display='none';
   if (r.open_incidents > 0) { ib.style.display=''; ib.textContent=r.open_incidents; } else ib.style.display='none';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// TOPOLOGY VIEW — canvas force-directed graph
+// ══════════════════════════════════════════════════════════════════════════
+
+const NODE_COLORS = {
+  local:'#3b82f6', snmp:'#06b6d4', ssh:'#10b981',
+  aws:'#fb923c', azure:'#60a5fa', gcp:'#4ade80', k8s:'#a78bfa'
+};
+
+function nodeColorFor(nodeId) {
+  if (!nodeId) return '#3b82f6';
+  if (nodeId.startsWith('snmp:'))  return NODE_COLORS.snmp;
+  if (nodeId.startsWith('ssh:'))   return NODE_COLORS.ssh;
+  if (nodeId.startsWith('aws:'))   return NODE_COLORS.aws;
+  if (nodeId.startsWith('azure:')) return NODE_COLORS.azure;
+  if (nodeId.startsWith('gcp:'))   return NODE_COLORS.gcp;
+  if (nodeId.startsWith('k8s:'))   return NODE_COLORS.k8s;
+  return NODE_COLORS.local;
+}
+
+function setupTopoCanvas() {
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas) return;
+
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    // Check if clicking a node
+    const hit = _topoNodes.find(n => Math.hypot(n.x - mx, n.y - my) < 20);
+    if (hit) {
+      _dragNode = hit;
+      _dragOffX = mx - hit.x;
+      _dragOffY = my - hit.y;
+    } else {
+      _panStart = { x: mx - _panX, y: my - _panY };
+    }
+  });
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    if (_dragNode) {
+      _dragNode.x = mx - _dragOffX;
+      _dragNode.y = my - _dragOffY;
+      _dragNode.vx = 0; _dragNode.vy = 0;
+      _dragNode.pinned = true;
+    } else if (_panStart) {
+      _panX = mx - _panStart.x;
+      _panY = my - _panStart.y;
+    }
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    _dragNode = null;
+    _panStart = null;
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    _dragNode = null;
+    _panStart = null;
+  });
+}
+
+async function loadTopology() {
+  const r = await fetch(`${API}/api/topology`).then(r=>r.json()).catch(()=>null);
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas) return;
+
+  canvas.width = canvas.offsetWidth || 900;
+
+  // Edge table
+  const tbody = document.getElementById('topoEdgeBody');
+  const edges = r?.edges || [];
+
+  if (!edges.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No topology data yet — install agents and let them run</td></tr>';
+    // Show just nodes if we have them
+    if (allNodes.length) {
+      buildTopoGraph(allNodes.map(n=>n.id), []);
+    }
+    return;
+  }
+
+  tbody.innerHTML = edges.map(e => `
+    <tr>
+      <td style="font-family:monospace;font-size:11px;color:var(--accent2)">${e.src_node}</td>
+      <td><span class="badge info">${e.src_service||'—'}</span></td>
+      <td style="font-family:monospace;font-size:11px;color:var(--text2)">${e.dst_node||e.dst_ip}</td>
+      <td><span class="badge info">${e.dst_service||'—'}</span></td>
+      <td style="color:var(--text3)">${e.protocol||'TCP'}</td>
+      <td style="color:var(--text3)">${e.conn_count||1}</td>
+    </tr>`).join('');
+
+  const nodeIds = [...new Set([...edges.map(e=>e.src_node), ...edges.map(e=>e.dst_node||e.dst_ip)])];
+  buildTopoGraph(nodeIds, edges);
+}
+
+function buildTopoGraph(nodeIds, edges) {
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas) return;
+  const W = canvas.width;
+  const H = canvas.height;
+
+  // Init nodes with random positions
+  _topoNodes = nodeIds.map((id, i) => ({
+    id, label: id.split(':').slice(-1)[0] || id,
+    x: W/2 + Math.cos(2*Math.PI*i/nodeIds.length) * Math.min(W,H) * 0.35,
+    y: H/2 + Math.sin(2*Math.PI*i/nodeIds.length) * Math.min(W,H) * 0.35,
+    vx: 0, vy: 0, pinned: false,
+    color: nodeColorFor(id),
+  }));
+  _topoEdges = edges;
+  _panX = 0; _panY = 0;
+
+  if (_topoAnim) cancelAnimationFrame(_topoAnim);
+  runTopology();
+}
+
+function resetTopology() {
+  _panX = 0; _panY = 0;
+  _topoNodes.forEach(n => { n.pinned = false; });
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas) return;
+  const W = canvas.width, H = canvas.height;
+  _topoNodes.forEach((n, i) => {
+    n.x = W/2 + Math.cos(2*Math.PI*i/_topoNodes.length) * Math.min(W,H) * 0.35;
+    n.y = H/2 + Math.sin(2*Math.PI*i/_topoNodes.length) * Math.min(W,H) * 0.35;
+    n.vx = 0; n.vy = 0;
+  });
+}
+
+function tickTopology() {
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas || !_topoNodes.length) return;
+  const W = canvas.width, H = canvas.height;
+  const REPEL  = 3500;
+  const SPRING = 0.035;
+  const LEN    = 160;
+  const DAMP   = 0.82;
+  const CENTER = 0.008;
+
+  const nodeMap = Object.fromEntries(_topoNodes.map(n => [n.id, n]));
+
+  // Repulsion
+  for (let i = 0; i < _topoNodes.length; i++) {
+    for (let j = i+1; j < _topoNodes.length; j++) {
+      const a = _topoNodes[i], b = _topoNodes[j];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const dist = Math.max(Math.sqrt(dx*dx + dy*dy), 0.1);
+      const f = REPEL / (dist * dist);
+      const fx = f * dx/dist, fy = f * dy/dist;
+      if (!a.pinned) { a.vx -= fx; a.vy -= fy; }
+      if (!b.pinned) { b.vx += fx; b.vy += fy; }
+    }
+  }
+
+  // Spring forces along edges
+  _topoEdges.forEach(e => {
+    const a = nodeMap[e.src_node], b = nodeMap[e.dst_node||e.dst_ip];
+    if (!a || !b) return;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const dist = Math.max(Math.sqrt(dx*dx + dy*dy), 0.1);
+    const f = SPRING * (dist - LEN);
+    const fx = f * dx/dist, fy = f * dy/dist;
+    if (!a.pinned) { a.vx += fx; a.vy += fy; }
+    if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
+  });
+
+  // Center gravity
+  _topoNodes.forEach(n => {
+    if (n.pinned) return;
+    n.vx += (W/2 - n.x) * CENTER;
+    n.vy += (H/2 - n.y) * CENTER;
+    n.vx *= DAMP; n.vy *= DAMP;
+    n.x += n.vx; n.y += n.vy;
+    n.x = Math.max(30, Math.min(W-30, n.x));
+    n.y = Math.max(30, Math.min(H-30, n.y));
+  });
+}
+
+function drawTopology() {
+  const canvas = document.getElementById('topoCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(_panX, _panY);
+
+  const nodeMap = Object.fromEntries(_topoNodes.map(n => [n.id, n]));
+
+  // Draw edges
+  _topoEdges.forEach(e => {
+    const a = nodeMap[e.src_node], b = nodeMap[e.dst_node||e.dst_ip];
+    if (!a || !b) return;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.strokeStyle = '#1a2d45';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Arrowhead
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const ex = b.x - Math.cos(angle) * 22;
+    const ey = b.y - Math.sin(angle) * 22;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - 8 * Math.cos(angle - 0.4), ey - 8 * Math.sin(angle - 0.4));
+    ctx.lineTo(ex - 8 * Math.cos(angle + 0.4), ey - 8 * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fillStyle = '#223550';
+    ctx.fill();
+    // Edge label
+    if (e.dst_service) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(e.dst_service, (a.x+b.x)/2, (a.y+b.y)/2 - 4);
+    }
+  });
+
+  // Draw nodes
+  _topoNodes.forEach(n => {
+    // Shadow
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, 18, 0, Math.PI * 2);
+    ctx.fillStyle = n.color + '22';
+    ctx.fill();
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, 14, 0, Math.PI * 2);
+    ctx.fillStyle = n.color;
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff22';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Label
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = 'bold 10px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label.length > 12 ? n.label.slice(0,12)+'…' : n.label, n.x, n.y + 28);
+  });
+
+  if (_topoNodes.length === 0) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No topology data — agents will map connections automatically', W/2, H/2);
+  }
+
+  ctx.restore();
+}
+
+let _topoTick = 0;
+function runTopology() {
+  tickTopology();
+  drawTopology();
+  _topoTick++;
+  // Slow down simulation after 300 ticks
+  if (_topoTick < 300 || _dragNode) {
+    _topoAnim = requestAnimationFrame(runTopology);
+  } else {
+    // Idle render loop (repaint on drag/pan)
+    _topoAnim = requestAnimationFrame(idleTopology);
+  }
+}
+
+function idleTopology() {
+  drawTopology();
+  _topoAnim = requestAnimationFrame(idleTopology);
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// LOGS VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+function debounceLogSearch() {
+  clearTimeout(_logDebounce);
+  _logDebounce = setTimeout(() => { logPage = 0; loadLogsView(); }, 400);
+}
+
+async function loadLogsView() {
+  const nodeId  = document.getElementById('logNodeFilter')?.value || '';
+  const service = document.getElementById('logServiceFilter')?.value || '';
+  const level   = document.getElementById('logLevelFilter')?.value || '';
+  const search  = document.getElementById('logSearch')?.value || '';
+  const offset  = logPage * LOG_PAGE_SIZE;
+
+  let url = `${API}/api/logs?limit=${LOG_PAGE_SIZE}&offset=${offset}`;
+  if (nodeId)  url += `&node_id=${encodeURIComponent(nodeId)}`;
+  if (service) url += `&service=${encodeURIComponent(service)}`;
+  if (level)   url += `&level=${level}`;
+  if (search)  url += `&search=${encodeURIComponent(search)}`;
+
+  const tbody = document.getElementById('logTableBody');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading…</td></tr>';
+
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if (!r) { tbody.innerHTML = '<tr><td colspan="6" class="empty">Failed to load logs</td></tr>'; return; }
+
+  document.getElementById('logPageInfo').textContent = `Page ${logPage + 1}`;
+  document.getElementById('logPrevBtn').disabled = logPage === 0;
+  document.getElementById('logNextBtn').disabled = r.logs.length < LOG_PAGE_SIZE;
+
+  // Populate service filter
+  const svcSel = document.getElementById('logServiceFilter');
+  const existing = [...svcSel.options].map(o => o.value);
+  r.logs.forEach(l => {
+    if (l.service && !existing.includes(l.service)) {
+      const opt = document.createElement('option');
+      opt.value = l.service; opt.textContent = l.service;
+      svcSel.appendChild(opt);
+      existing.push(l.service);
+    }
+  });
+
+  if (!r.logs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No logs found</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = r.logs.map(l => {
+    const lvl = (l.level || 'info').toLowerCase();
+    const ts  = new Date(l.ts).toLocaleString();
+    const msg = (l.message || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const traceId = l.trace_id || '';
+    return `<tr>
+      <td style="color:var(--text3);white-space:nowrap;font-size:11px">${ts}</td>
+      <td><span class="log-level ${lvl}">${lvl}</span></td>
+      <td style="font-size:11px;color:var(--text3);font-family:monospace">${l.node_id||'—'}</td>
+      <td style="font-size:11px;color:var(--accent2);font-family:monospace">${l.service||'—'}</td>
+      <td><div class="log-msg" title="${msg}">${msg}</div></td>
+      <td>${traceId ? `<span class="log-trace" onclick="jumpToTrace('${traceId}')">${traceId.slice(0,12)}…</span>` : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function searchByTrace() {
+  const traceId = document.getElementById('logTraceSearch')?.value.trim();
+  if (!traceId) return;
+  const tbody = document.getElementById('logTableBody');
+  tbody.innerHTML = '<tr><td colspan="6" class="loading">Loading trace…</td></tr>';
+  const r = await fetch(`${API}/api/logs/trace/${encodeURIComponent(traceId)}`).then(r=>r.json()).catch(()=>null);
+  if (!r || !r.spans) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No data for this trace</td></tr>'; return; }
+
+  const spans = r.spans || [];
+  if (!spans.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No spans found</td></tr>'; return; }
+
+  tbody.innerHTML = spans.map(s => {
+    const st = s.status === 'error' ? 'error' : 'info';
+    const dur = s.duration_ms != null ? `${s.duration_ms}ms` : '—';
+    return `<tr>
+      <td style="color:var(--text3);font-size:11px">${new Date(s.ts).toLocaleString()}</td>
+      <td><span class="log-level ${st}">${s.status||'ok'}</span></td>
+      <td style="font-size:11px;color:var(--text3);font-family:monospace">${s.node_id||'—'}</td>
+      <td style="font-size:11px;color:var(--accent2);font-family:monospace">${s.service||'—'}</td>
+      <td><div class="log-msg">${s.operation||'—'} — ${dur}</div></td>
+      <td style="font-size:10px;color:var(--text3);font-family:monospace">${(s.span_id||'').slice(0,12)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function jumpToTrace(traceId) {
+  const inp = document.getElementById('logTraceSearch');
+  if (inp) inp.value = traceId;
+  searchByTrace();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// KNOWLEDGE BASE VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+function debounceKbSearch() {
+  clearTimeout(_kbDebounce);
+  _kbDebounce = setTimeout(loadKbView, 400);
+}
+
+async function loadKbView() {
+  const query = document.getElementById('kbSearch')?.value.trim() || '';
+  const type  = document.getElementById('kbTypeFilter')?.value || '';
+  const el    = document.getElementById('kbEntryList');
+
+  let url = query ? `${API}/api/kb/search?q=${encodeURIComponent(query)}&limit=50` : `${API}/api/kb?limit=100`;
+  if (type && !query) url += `&type=${type}`;
+
+  el.innerHTML = '<div class="loading">Loading…</div>';
+  const r = await fetch(url).then(r=>r.json()).catch(()=>null);
+  if (!r) { el.innerHTML = '<div class="empty">Failed to load knowledge base</div>'; return; }
+
+  const entries = r.results || r.entries || [];
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty">No entries found. Add runbooks or import from Markdown.</div>';
+    return;
+  }
+
+  const filtered = type ? entries.filter(e => e.type === type) : entries;
+  el.innerHTML = filtered.map(e => renderKbCard(e)).join('');
+}
+
+function renderKbCard(e) {
+  const tags = (e.tags || []).map(t => `<span class="kb-tag">${t}</span>`).join('');
+  const content = (e.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const preview = content.length > 300 ? content.slice(0, 300) + '…' : content;
+  return `<div class="kb-card">
+    <div class="kb-card-header">
+      <div class="kb-card-title">${e.title}</div>
+      <span class="kb-type ${e.type||'config_note'}">${e.type||'—'}</span>
+    </div>
+    <div class="kb-card-body" style="white-space:pre-wrap;font-family:monospace">${preview}</div>
+    ${tags ? `<div class="kb-card-tags">${tags}</div>` : ''}
+    <div class="kb-actions">
+      <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px" onclick="deleteKbEntry('${e.id}')">Delete</button>
+    </div>
+  </div>`;
+}
+
+function openKbAddModal() {
+  document.getElementById('kbNewTitle').value   = '';
+  document.getElementById('kbNewContent').value = '';
+  document.getElementById('kbNewTags').value    = '';
+  document.getElementById('kbAddModal').style.display = 'flex';
+}
+
+async function saveKbEntry() {
+  const title   = document.getElementById('kbNewTitle').value.trim();
+  const type    = document.getElementById('kbNewType').value;
+  const content = document.getElementById('kbNewContent').value.trim();
+  const tagsRaw = document.getElementById('kbNewTags').value;
+  const tags    = tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
+
+  if (!title || !content) { showToast('high', 'Missing fields', 'Title and content are required'); return; }
+
+  const r = await fetch(`${API}/api/kb`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ title, type, content, tags })
+  }).then(r=>r.json()).catch(()=>null);
+
+  if (!r || r.error) { showToast('critical', 'Error', r?.error || 'Failed to save'); return; }
+
+  document.getElementById('kbAddModal').style.display = 'none';
+  showToast('info', 'KB Entry Added', title);
+  loadKbView(); loadStats();
+}
+
+async function deleteKbEntry(id) {
+  if (!confirm('Delete this KB entry?')) return;
+  await fetch(`${API}/api/kb/entries/${id}`, {method:'DELETE'});
+  loadKbView(); loadStats();
+}
+
+function openKbImportModal() {
+  document.getElementById('kbImportContent').value = '';
+  document.getElementById('kbImportModal').style.display = 'flex';
+}
+
+async function importMarkdown() {
+  const content = document.getElementById('kbImportContent').value.trim();
+  if (!content) return;
+
+  const r = await fetch(`${API}/api/kb/import/markdown`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ content })
+  }).then(r=>r.json()).catch(()=>null);
+
+  if (!r) { showToast('critical', 'Import failed', 'Could not import markdown'); return; }
+
+  document.getElementById('kbImportModal').style.display = 'none';
+  showToast('info', 'Runbook Imported', `${r.imported||0} entries added`);
+  loadKbView(); loadStats();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────

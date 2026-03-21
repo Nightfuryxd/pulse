@@ -3,3 +3,20 @@ httpx==0.27.2
 python-dotenv==1.0.1
 pyyaml==6.0.2
 pysnmp==5.1.0
+
+# ── Cloud integrations (installed only when the relevant ENABLE_* flag is set) ──
+# AWS
+boto3>=1.34.0
+
+# Azure (install when ENABLE_AZURE=true)
+# azure-identity>=1.16.0
+# azure-mgmt-compute>=31.0.0
+# azure-mgmt-monitor>=6.0.0
+# azure-mgmt-sql>=3.0.1
+# azure-mgmt-web>=7.2.0
+
+# GCP (install when ENABLE_GCP=true)
+# google-cloud-monitoring>=2.22.0
+# google-cloud-compute>=1.18.0
+# google-api-python-client>=2.130.0
+# google-auth>=2.29.0

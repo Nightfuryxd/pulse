@@ -771,6 +771,28 @@ async def main():
                     except Exception as e:
                         print(f"[Agent] AWS error: {e}")
 
+                # ── Azure ──────────────────────────────────────────────────
+                if ENABLE_AZURE:
+                    try:
+                        from cloud.azure import collect_all as azure_collect_all
+                        azure_data = await azure_collect_all()
+                        for m in azure_data["metrics"]:
+                            await ship_metrics(http, m)
+                        await ship_events(http, azure_data["events"])
+                    except Exception as e:
+                        print(f"[Agent] Azure error: {e}")
+
+                # ── GCP ────────────────────────────────────────────────────
+                if ENABLE_GCP:
+                    try:
+                        from cloud.gcp import collect_all as gcp_collect_all
+                        gcp_data = await gcp_collect_all()
+                        for m in gcp_data["metrics"]:
+                            await ship_metrics(http, m)
+                        await ship_events(http, gcp_data["events"])
+                    except Exception as e:
+                        print(f"[Agent] GCP error: {e}")
+
                 # Summary log
                 total_nodes = 1 + len(snmp_targets) + len(ssh_targets)
                 print(
