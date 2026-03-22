@@ -312,7 +312,26 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:monospace}
     <div class="sb-item" onclick="showView('logs')">
       <span class="sb-item-icon">≡</span><span class="sb-item-label">Logs</span>
     </div>
+    <div class="sb-section">Observe</div>
+    <div class="sb-item" onclick="showView('synthetic')">
+      <span class="sb-item-icon">◉</span><span class="sb-item-label">Synthetic</span>
+      <span class="sb-badge" id="sbSyntheticBadge" style="display:none;background:#064e3b;color:#6ee7b7">0</span>
+    </div>
+    <div class="sb-section">Reliability</div>
+    <div class="sb-item" onclick="showView('slos')">
+      <span class="sb-item-icon">◎</span><span class="sb-item-label">SLOs</span>
+      <span class="sb-badge" id="sbSloBadge" style="display:none">0</span>
+    </div>
+    <div class="sb-item" onclick="showView('predictions')">
+      <span class="sb-item-icon">◬</span><span class="sb-item-label">Predictions</span>
+    </div>
     <div class="sb-section">Intelligence</div>
+    <div class="sb-item" onclick="showView('ask')">
+      <span class="sb-item-icon">⬡</span><span class="sb-item-label">Ask PULSE</span>
+    </div>
+    <div class="sb-item" onclick="showView('reports')">
+      <span class="sb-item-icon">≡</span><span class="sb-item-label">Reports</span>
+    </div>
     <div class="sb-item" onclick="showView('kb')">
       <span class="sb-item-icon">◎</span><span class="sb-item-label">Knowledge Base</span>
       <span id="sbKbCount" style="margin-left:auto;font-size:10px;color:var(--text3)"></span>
@@ -359,14 +378,14 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:monospace}
       <div class="stat-tile-sub">active war rooms</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">KB Entries</div>
-      <div class="stat-tile-val" id="statKb">—</div>
-      <div class="stat-tile-sub">runbooks + guides</div>
+      <div class="stat-tile-label">Synthetic</div>
+      <div class="stat-tile-val green" id="statSynthetic">—</div>
+      <div class="stat-tile-sub">probes up</div>
     </div>
     <div class="stat-tile">
-      <div class="stat-tile-label">Dashboard Clients</div>
-      <div class="stat-tile-val" id="statClients">—</div>
-      <div class="stat-tile-sub">live connections</div>
+      <div class="stat-tile-label">SLOs</div>
+      <div class="stat-tile-val" id="statSlos">—</div>
+      <div class="stat-tile-sub" id="statSlosSub">compliance</div>
     </div>
   </div>
 
@@ -658,6 +677,118 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:monospace}
       </div>
     </div>
 
+    <!-- ══ VIEW: SYNTHETIC ══ -->
+    <div class="view" id="view-synthetic">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◉</span> Synthetic Monitoring</div>
+          <button class="filter-btn" onclick="loadSyntheticView()">↺ Refresh</button>
+        </div>
+        <div class="node-grid" id="syntheticGrid" style="padding:16px">
+          <div class="empty" style="grid-column:1/-1">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: SLOs ══ -->
+    <div class="view" id="view-slos">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◎</span> SLO / SLA Tracking</div>
+          <button class="filter-btn" onclick="loadSloView()">↺ Refresh</button>
+        </div>
+        <div id="sloContent" style="padding:16px">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◬</span> SLO Breach History</div>
+        </div>
+        <div id="sloBreachList">
+          <div class="empty">No breaches recorded</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: PREDICTIONS ══ -->
+    <div class="view" id="view-predictions">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">◬</span> Predictive Forecasts</div>
+          <button class="filter-btn" onclick="loadPredictionsView()">↺ Refresh</button>
+        </div>
+        <div id="forecastContent" style="padding:16px">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">⚡</span> Prediction Alerts</div>
+        </div>
+        <div id="predictionAlerts">
+          <div class="empty">No prediction alerts</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: ASK PULSE ══ -->
+    <div class="view" id="view-ask">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">⬡</span> Ask PULSE — Natural Language Query</div>
+        </div>
+        <div style="padding:20px">
+          <div style="display:flex;gap:10px">
+            <input class="form-input" id="nlQuestion" placeholder="e.g. which nodes have high CPU? any open alerts? how are my SLOs?" style="flex:1;font-size:14px;padding:12px 16px" onkeydown="if(event.key==='Enter')askPulse()">
+            <button class="btn btn-primary" onclick="askPulse()" style="padding:12px 24px;font-size:14px">Ask</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <button class="filter-btn" onclick="askQuick('show me all nodes')">All Nodes</button>
+            <button class="filter-btn" onclick="askQuick('any open alerts?')">Open Alerts</button>
+            <button class="filter-btn" onclick="askQuick('how are my SLOs?')">SLO Status</button>
+            <button class="filter-btn" onclick="askQuick('any anomalies?')">Anomalies</button>
+            <button class="filter-btn" onclick="askQuick('are all endpoints healthy?')">Endpoint Health</button>
+            <button class="filter-btn" onclick="askQuick('what incidents happened recently?')">Recent Incidents</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px;display:none" id="nlResultPanel">
+        <div class="ph">
+          <div class="ph-title" id="nlResultTitle">Answer</div>
+          <span class="badge info" id="nlResultSeverity">info</span>
+        </div>
+        <div style="padding:20px" id="nlResultBody">
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ VIEW: REPORTS ══ -->
+    <div class="view" id="view-reports">
+      <div class="panel">
+        <div class="ph">
+          <div class="ph-title"><span class="ph-title-icon">≡</span> Infrastructure Reports</div>
+          <div class="ph-right">
+            <button class="filter-btn" onclick="generateReport('daily')">Generate Daily</button>
+            <button class="filter-btn" onclick="generateReport('weekly')">Generate Weekly</button>
+            <button class="filter-btn active" onclick="generateReport('monthly')">Generate Monthly</button>
+          </div>
+        </div>
+        <div id="reportContent" style="padding:16px">
+          <div class="empty">Click a button above to generate a report, or view previous reports below.</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <div class="ph">
+          <div class="ph-title">Report History</div>
+          <button class="filter-btn" onclick="loadReportList()">↺ Refresh</button>
+        </div>
+        <div id="reportList">
+          <div class="empty">No reports generated yet</div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- #content -->
 </div><!-- #main -->
 
@@ -830,7 +961,9 @@ function handleIncidentWS(msg) {
 const viewTitles = {
   overview:'Overview', nodes:'Nodes', metrics:'Metric History',
   alerts:'Alerts', incidents:'Incidents', events:'Event Feed',
-  topology:'Service Topology', logs:'Log Stream', kb:'Knowledge Base'
+  topology:'Service Topology', logs:'Log Stream', kb:'Knowledge Base',
+  synthetic:'Synthetic Monitoring', slos:'SLO / SLA Tracking',
+  predictions:'Predictive Forecasts', ask:'Ask PULSE', reports:'Reports'
 };
 
 function showView(name) {
@@ -847,8 +980,12 @@ function showView(name) {
   if (name === 'nodes')     renderNodeCards();
   if (name === 'metrics')   populateMetricNodeSelect();
   if (name === 'topology')  loadTopology();
-  if (name === 'logs')      loadLogsView();
-  if (name === 'kb')        loadKbView();
+  if (name === 'logs')        loadLogsView();
+  if (name === 'kb')          loadKbView();
+  if (name === 'synthetic')   loadSyntheticView();
+  if (name === 'slos')        loadSloView();
+  if (name === 'predictions') loadPredictionsView();
+  if (name === 'reports')     loadReportList();
 }
 
 // ── Load all data ──────────────────────────────────────────────────────────
@@ -864,8 +1001,20 @@ async function loadStats() {
   document.getElementById('statAlerts').textContent   = r.open_alerts;
   document.getElementById('statCritical').textContent = r.critical_alerts;
   document.getElementById('statIncidents').textContent= r.open_incidents;
-  document.getElementById('statKb').textContent       = r.kb_entries ?? '—';
-  document.getElementById('statClients').textContent  = r.connected_clients;
+  // Synthetic
+  const synEl = document.getElementById('statSynthetic');
+  synEl.textContent = `${r.synthetic_up||0}/${r.synthetic_total||0}`;
+  synEl.className = 'stat-tile-val ' + (r.synthetic_up === r.synthetic_total ? 'green' : 'red');
+  const synBadge = document.getElementById('sbSyntheticBadge');
+  if (r.synthetic_total > 0) { synBadge.style.display=''; synBadge.textContent=`${r.synthetic_up}/${r.synthetic_total}`; }
+  // SLOs
+  const sloEl = document.getElementById('statSlos');
+  const slosMet = r.slos_met ?? 0, slosTotal = r.slos_total ?? 0;
+  sloEl.textContent = slosTotal > 0 ? `${slosMet}/${slosTotal}` : '—';
+  sloEl.className = 'stat-tile-val ' + (slosMet === slosTotal ? 'green' : slosMet > 0 ? 'yellow' : 'red');
+  document.getElementById('statSlosSub').textContent = slosMet === slosTotal ? 'all met' : `${slosTotal-slosMet} breached`;
+  const sloBadge = document.getElementById('sbSloBadge');
+  if (slosTotal > 0 && slosMet < slosTotal) { sloBadge.style.display=''; sloBadge.textContent=slosTotal-slosMet; } else sloBadge.style.display='none';
   if (r.kb_entries != null) document.getElementById('sbKbCount').textContent = r.kb_entries;
 }
 
@@ -1689,6 +1838,252 @@ async function importMarkdown() {
   document.getElementById('kbImportModal').style.display = 'none';
   showToast('info', 'Runbook Imported', `${r.imported||0} entries added`);
   loadKbView(); loadStats();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYNTHETIC MONITORING VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadSyntheticView() {
+  const r = await fetch(`${API}/api/synthetic`).then(r=>r.json()).catch(()=>null);
+  const el = document.getElementById('syntheticGrid');
+  if (!r || !r.results?.length) { el.innerHTML = '<div class="empty" style="grid-column:1/-1">No synthetic targets configured</div>'; return; }
+
+  el.innerHTML = r.results.map(s => {
+    const isUp = s.status === 'up';
+    const health = isUp ? 'ok' : 'crit';
+    const latency = s.response_time_ms != null ? `${Math.round(s.response_time_ms)}ms` : '—';
+    const ssl = s.ssl_days_remaining != null ? `SSL: ${s.ssl_days_remaining}d` : '';
+    const sslColor = s.ssl_days_remaining != null ? (s.ssl_days_remaining < 14 ? 'var(--red)' : s.ssl_days_remaining < 30 ? 'var(--yellow)' : 'var(--green)') : '';
+    const lastCheck = s.last_check ? new Date(s.last_check).toLocaleTimeString() : '—';
+    return `<div class="node-card ${health}" style="min-width:220px">
+      <div class="nc-name">${s.id || s.url || '—'}</div>
+      <div class="nc-ip" style="word-break:break-all">${s.url || ''}</div>
+      <div class="nc-metrics" style="margin-top:12px">
+        <div class="nc-metric"><div class="nc-metric-label">Status</div><div class="nc-metric-val ${health}" style="font-size:16px">${isUp ? 'UP' : 'DOWN'}</div></div>
+        <div class="nc-metric"><div class="nc-metric-label">Latency</div><div class="nc-metric-val" style="font-size:14px;color:var(--text)">${latency}</div></div>
+        <div class="nc-metric"><div class="nc-metric-label">Checked</div><div class="nc-metric-val" style="font-size:11px;color:var(--text3)">${lastCheck}</div></div>
+      </div>
+      ${ssl ? `<div style="margin-top:8px;font-size:11px;color:${sslColor};font-weight:600">${ssl}</div>` : ''}
+      ${s.error ? `<div style="margin-top:6px;font-size:11px;color:var(--red)">${s.error}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SLO VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadSloView() {
+  const [statusR, breachR] = await Promise.all([
+    fetch(`${API}/api/slos/status`).then(r=>r.json()).catch(()=>null),
+    fetch(`${API}/api/slos/breaches`).then(r=>r.json()).catch(()=>null),
+  ]);
+
+  const el = document.getElementById('sloContent');
+  if (!statusR || !Object.keys(statusR.status || {}).length) {
+    el.innerHTML = '<div class="empty">No SLOs defined. Add them in config/slos.yaml</div>';
+    return;
+  }
+
+  const slos = Object.values(statusR.status);
+  el.innerHTML = slos.map(s => {
+    const isMet = s.status === 'met';
+    const compliance = s.compliance != null ? `${s.compliance.toFixed(2)}%` : 'Collecting…';
+    const budget = s.error_budget_remaining != null ? s.error_budget_remaining : null;
+    const budgetColor = budget != null ? (budget >= 0 ? 'var(--green)' : 'var(--red)') : 'var(--text3)';
+    const barWidth = s.compliance != null ? Math.min(100, Math.max(0, s.compliance)) : 0;
+    const barClass = isMet ? 'ok' : 'crit';
+    const target = s.target || 0;
+
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:14px;font-weight:700">${s.name || s.id}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${s.description || s.type || ''}</div>
+        </div>
+        <span class="badge ${isMet ? 'open' : 'critical'}" style="font-size:12px;padding:4px 12px">${isMet ? 'MET' : s.status?.toUpperCase() || '—'}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:16px;margin-top:12px">
+        <div style="flex:1">
+          <div class="bar-bg" style="height:8px;border-radius:4px">
+            <div class="bar-fill ${barClass}" style="width:${barWidth}%;border-radius:4px"></div>
+          </div>
+        </div>
+        <div style="font-size:20px;font-weight:800;color:${isMet ? 'var(--green)' : 'var(--red)'};min-width:80px;text-align:right">${compliance}</div>
+      </div>
+      <div style="display:flex;gap:24px;margin-top:10px;font-size:11px;color:var(--text3)">
+        <span>Target: ${target}%</span>
+        <span>Samples: ${s.samples || 0}</span>
+        <span>Window: ${s.window_days || '—'}d</span>
+        ${budget != null ? `<span style="color:${budgetColor};font-weight:700">Error Budget: ${budget >= 0 ? '+' : ''}${budget.toFixed(2)}%</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Breaches
+  const bel = document.getElementById('sloBreachList');
+  const breaches = breachR?.breaches || [];
+  if (!breaches.length) { bel.innerHTML = '<div class="empty">No breaches recorded</div>'; return; }
+  bel.innerHTML = `<table class="data-table"><thead><tr><th>SLO</th><th>Time</th><th>Compliance</th><th>Target</th><th>Budget</th></tr></thead><tbody>${
+    breaches.map(b => `<tr>
+      <td style="font-weight:600">${b.slo_name||b.slo_id}</td>
+      <td style="color:var(--text3);font-size:11px">${new Date(b.ts).toLocaleString()}</td>
+      <td style="color:var(--red);font-weight:700">${b.compliance?.toFixed(2) || '—'}%</td>
+      <td>${b.target || '—'}%</td>
+      <td style="color:var(--red);font-weight:700">${b.error_budget_remaining?.toFixed(2) || '—'}%</td>
+    </tr>`).join('')
+  }</tbody></table>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// PREDICTIONS VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+async function loadPredictionsView() {
+  const [forecastR, predR] = await Promise.all([
+    fetch(`${API}/api/forecasts`).then(r=>r.json()).catch(()=>null),
+    fetch(`${API}/api/predictions`).then(r=>r.json()).catch(()=>null),
+  ]);
+
+  const el = document.getElementById('forecastContent');
+  const forecasts = forecastR?.forecasts || {};
+  const nodes = Object.values(forecasts);
+
+  if (!nodes.length) {
+    el.innerHTML = '<div class="empty">No forecast data yet — needs 30+ metric samples per node</div>';
+  } else {
+    el.innerHTML = nodes.map(node => {
+      const metrics = node.metrics || {};
+      return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:4px">${node.node_id}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:12px">Updated: ${node.updated_at ? new Date(node.updated_at).toLocaleTimeString() : '—'}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">
+          ${Object.entries(metrics).map(([name, m]) => {
+            const trendColor = m.trend === 'rising' ? 'var(--red)' : m.trend === 'falling' ? 'var(--green)' : 'var(--text3)';
+            const trendIcon = m.trend === 'rising' ? '↑' : m.trend === 'falling' ? '↓' : '→';
+            const willBreach = m.predicted_1h >= (m.warn_threshold || 999);
+            return `<div style="background:var(--surface3);border:1px solid var(--border);border-radius:6px;padding:12px">
+              <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">${name.replace(/_/g,' ')}</div>
+              <div style="font-size:22px;font-weight:800;margin-top:4px;color:var(--text)">${m.current}${m.unit}</div>
+              <div style="font-size:12px;color:${trendColor};font-weight:600;margin-top:4px">${trendIcon} ${m.trend} · predicted: ${m.predicted_1h}${m.unit}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">R²=${m.r_squared} · warn: ${m.warn_threshold}${m.unit}</div>
+              ${willBreach ? '<div style="font-size:10px;color:var(--red);font-weight:700;margin-top:4px">⚠ May breach threshold</div>' : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Prediction alerts
+  const ael = document.getElementById('predictionAlerts');
+  const preds = predR?.predictions || [];
+  if (!preds.length) { ael.innerHTML = '<div class="empty">No prediction alerts — all metrics within safe trends</div>'; return; }
+  ael.innerHTML = preds.map(p => `
+    <div class="alert-row">
+      <div class="alert-sev ${p.severity}"></div>
+      <div class="alert-body">
+        <div class="alert-title">${p.metric.replace(/_/g,' ')} on ${p.node_id}</div>
+        <div class="alert-sub">Current: ${p.current_value}${p.unit} → Predicted: ${p.predicted_value}${p.unit} (threshold: ${p.threshold}${p.unit}) in ~${Math.round(p.time_to_breach_minutes)}min</div>
+      </div>
+      <span class="badge ${p.severity}">${p.severity}</span>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ASK PULSE — Natural Language Query
+// ══════════════════════════════════════════════════════════════════════════
+
+function askQuick(q) {
+  document.getElementById('nlQuestion').value = q;
+  askPulse();
+}
+
+async function askPulse() {
+  const q = document.getElementById('nlQuestion').value.trim();
+  if (!q) return;
+
+  const panel = document.getElementById('nlResultPanel');
+  panel.style.display = 'block';
+  document.getElementById('nlResultBody').innerHTML = '<div class="loading">Thinking…</div>';
+  document.getElementById('nlResultTitle').textContent = `"${q}"`;
+
+  const r = await fetch(`${API}/api/query`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question: q})
+  }).then(r=>r.json()).catch(()=>null);
+
+  if (!r) { document.getElementById('nlResultBody').innerHTML = '<div class="empty">Failed to get answer</div>'; return; }
+
+  const sev = r.severity || 'info';
+  document.getElementById('nlResultSeverity').className = `badge ${sev}`;
+  document.getElementById('nlResultSeverity').textContent = sev;
+
+  let html = `<div style="font-size:14px;line-height:1.8;white-space:pre-wrap;color:var(--text)">${(r.answer||'').replace(/</g,'&lt;')}</div>`;
+
+  if (r.suggestions?.length) {
+    html += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Suggestions</div>
+      ${r.suggestions.map(s => `<div style="font-size:12px;color:var(--text2);margin-bottom:4px">• ${s}</div>`).join('')}
+    </div>`;
+  }
+
+  html += `<div style="margin-top:12px;font-size:10px;color:var(--text3)">Source: ${r.source || '—'} · ${r.ts ? new Date(r.ts).toLocaleTimeString() : ''}</div>`;
+
+  document.getElementById('nlResultBody').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// REPORTS VIEW
+// ══════════════════════════════════════════════════════════════════════════
+
+async function generateReport(period) {
+  const el = document.getElementById('reportContent');
+  el.innerHTML = '<div class="loading">Generating report…</div>';
+
+  const r = await fetch(`${API}/api/reports/generate`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({period})
+  }).then(r=>r.json()).catch(()=>null);
+
+  if (!r || !r.html) { el.innerHTML = '<div class="empty">Failed to generate report</div>'; return; }
+
+  // Show report in iframe
+  el.innerHTML = `<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <span style="font-weight:700">${period.charAt(0).toUpperCase()+period.slice(1)} Report</span>
+      <span style="color:var(--text3);font-size:11px;margin-left:8px">${r.generated_at?.slice(0,16) || ''}</span>
+    </div>
+    <button class="filter-btn" onclick="window.open('${API}/api/reports/${0}/html','_blank')">Open in New Tab</button>
+  </div>
+  <iframe srcdoc="${r.html.replace(/"/g,'&quot;')}" style="width:100%;height:700px;border:1px solid var(--border);border-radius:8px;background:#fff"></iframe>`;
+
+  loadReportList();
+}
+
+async function loadReportList() {
+  const r = await fetch(`${API}/api/reports?limit=10`).then(r=>r.json()).catch(()=>null);
+  const el = document.getElementById('reportList');
+  const reports = r?.reports || [];
+  if (!reports.length) { el.innerHTML = '<div class="empty">No reports generated yet</div>'; return; }
+
+  el.innerHTML = `<table class="data-table"><thead><tr><th>Period</th><th>Generated</th><th>Nodes</th><th>Alerts</th><th>SLO Breaches</th><th></th></tr></thead><tbody>${
+    reports.map((rpt, i) => {
+      const stats = rpt.stats || {};
+      const alerts = stats.alerts || {};
+      return `<tr>
+        <td style="font-weight:600;text-transform:capitalize">${rpt.period}</td>
+        <td style="color:var(--text3);font-size:11px">${rpt.generated_at ? new Date(rpt.generated_at).toLocaleString() : '—'}</td>
+        <td>${stats.total_nodes || 0}</td>
+        <td>${alerts.total || 0}</td>
+        <td style="color:${(stats.slo_breaches||0) > 0 ? 'var(--red)' : 'var(--text3)'}">${stats.slo_breaches || 0}</td>
+        <td><button class="filter-btn" onclick="window.open('${API}/api/reports/${i}/html','_blank')">View</button></td>
+      </tr>`;
+    }).join('')
+  }</tbody></table>`;
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
