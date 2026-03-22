@@ -1,0 +1,61 @@
+# SLO/SLA Definitions for PULSE
+# Each SLO tracks compliance over a rolling window and alerts on breaches.
+
+slos:
+  # Availability SLO — tracks uptime of PULSE self-check via synthetic monitoring
+  - id: pulse-api-availability
+    name: "PULSE API Availability"
+    description: "PULSE API must be available 99.9% of the time"
+    type: availability
+    target_id: pulse-self-check   # matches synthetic target id
+    target: 99.9                  # percentage
+    window_days: 30
+    severity: critical
+
+  # Latency SLO — API response time tracked via synthetic probes
+  - id: pulse-api-latency
+    name: "PULSE API Latency p99"
+    description: "99% of API responses must be under 500ms"
+    type: latency
+    target_id: pulse-self-check
+    threshold_ms: 500
+    percentile: 99
+    target: 99.0
+    window_days: 7
+    severity: high
+
+  # Metric SLO — CPU usage across nodes
+  - id: node-cpu-slo
+    name: "Node CPU Utilization"
+    description: "CPU should stay below 80% at least 95% of the time"
+    type: metric
+    metric_name: cpu_percent
+    threshold: 80
+    operator: lt
+    target: 95.0
+    window_days: 7
+    severity: medium
+
+  # Metric SLO — Memory usage
+  - id: node-memory-slo
+    name: "Node Memory Utilization"
+    description: "Memory should stay below 90% at least 99% of the time"
+    type: metric
+    metric_name: memory_percent
+    threshold: 90
+    operator: lt
+    target: 99.0
+    window_days: 7
+    severity: high
+
+  # Metric SLO — Disk usage
+  - id: node-disk-slo
+    name: "Node Disk Utilization"
+    description: "Disk should stay below 85% at least 99% of the time"
+    type: metric
+    metric_name: disk_percent
+    threshold: 85
+    operator: lt
+    target: 99.0
+    window_days: 30
+    severity: critical

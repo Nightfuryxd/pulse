@@ -39,9 +39,17 @@ from synthetic import synthetic_loop, get_synthetic_results, get_synthetic_targe
 from dbmonitor import dbmonitor_loop, get_db_results, get_db_targets
 from anomaly import evaluate_metric as anomaly_evaluate, get_baselines, get_recent_anomalies
 from otel import router as otel_router
+from slo import slo_loop, get_slos, get_slo_status, get_slo_breaches, evaluate_all_slos, feed_metric as slo_feed_metric
+from predict import feed_metric as predict_feed, check_predictions, get_predictions, get_forecasts, get_forecast_for_metric
+from rbac import rbac_middleware, create_api_key, list_api_keys, revoke_api_key, delete_api_key, is_rbac_enabled, ROLES
+from reports import report_loop, generate_report, send_report_email, get_recent_reports, _recent_reports
+from nlquery import execute_query as nl_execute_query
+import jira_integration
+import servicenow
 
-app = FastAPI(title="PULSE", version="3.0.0", description="AI-powered unified infrastructure intelligence")
+app = FastAPI(title="PULSE", version="4.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.middleware("http")(rbac_middleware)
 app.include_router(otel_router)
 
 
@@ -85,7 +93,10 @@ async def startup():
     asyncio.create_task(escalation_loop())
     asyncio.create_task(synthetic_loop())
     asyncio.create_task(dbmonitor_loop())
-    print("[PULSE] API v3.0 ready — Phase 2: synthetic, DB monitor, anomaly, OTel")
+    asyncio.create_task(slo_loop())
+    asyncio.create_task(report_loop())
+    rbac_status = "ON" if is_rbac_enabled() else "OFF (set RBAC_ENABLED=true to enable)"
+    print(f"[PULSE] API v4.0 ready — Phase 3: RBAC [{rbac_status}], SLO, predict, NL query, Jira, ServiceNow, reports")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -271,6 +282,22 @@ async def ingest_metrics(
     anomaly_events = anomaly_evaluate(payload.node_id, m_dict)
     for ae in anomaly_events:
         background_tasks.add_task(_run_event_detection, payload.node_id, ae, db)
+
+    # Predictive alerting — feed data and check for threshold breach forecasts
+    predict_feed(payload.node_id, m_dict)
+    pred_alerts = check_predictions(payload.node_id, m_dict)
+    for pa in pred_alerts:
+        pred_event = {
+            "node_id": payload.node_id, "type": "predictive_alert",
+            "severity": pa["severity"], "source": "predictor",
+            "message": f"Predicted {pa['metric']} will reach {pa['predicted_value']}{pa['unit']} "
+                       f"(threshold {pa['threshold']}{pa['unit']}) in ~{pa['time_to_breach_minutes']:.0f}m",
+            "data": pa,
+        }
+        background_tasks.add_task(_run_event_detection, payload.node_id, pred_event, db)
+
+    # SLO tracking — feed metric data
+    slo_feed_metric(payload.node_id, m_dict)
 
     await ws_manager.broadcast({"type": "metric", "node_id": payload.node_id, "data": m_dict})
     return {"accepted": True}
@@ -966,6 +993,224 @@ async def list_baselines(node_id: Optional[str] = None):
     return {"baselines": get_baselines(node_id)}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SLO / SLA TRACKING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/slos")
+async def list_slos():
+    """Get all SLO definitions and their current status."""
+    return {"slos": get_slos(), "status": get_slo_status()}
+
+
+@app.get("/api/slos/status")
+async def slo_status():
+    """Get current compliance status for all SLOs."""
+    return {"status": evaluate_all_slos()}
+
+
+@app.get("/api/slos/breaches")
+async def slo_breaches(limit: int = 50):
+    """Get recent SLO breaches."""
+    return {"breaches": get_slo_breaches(limit)}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PREDICTIVE ALERTING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/predictions")
+async def list_predictions(node_id: Optional[str] = None, limit: int = 50):
+    """Get recent predictive alerts."""
+    return {"predictions": get_predictions(node_id, limit)}
+
+
+@app.get("/api/forecasts")
+async def list_forecasts(node_id: Optional[str] = None):
+    """Get current metric forecasts per node."""
+    return {"forecasts": get_forecasts(node_id)}
+
+
+@app.get("/api/forecasts/{node_id}/{metric_name}")
+async def get_forecast_detail(node_id: str, metric_name: str, horizon: int = 60):
+    """Get detailed forecast for a specific node+metric."""
+    return get_forecast_for_metric(node_id, metric_name, horizon)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NATURAL LANGUAGE QUERYING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/query")
+async def natural_language_query(body: dict, db: AsyncSession = Depends(get_db)):
+    """Ask PULSE a question in natural language."""
+    question = body.get("question", body.get("q", ""))
+    if not question:
+        raise HTTPException(400, "Missing 'question' field")
+    return await nl_execute_query(question, db)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RBAC — API KEY MANAGEMENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/rbac")
+async def rbac_status_endpoint():
+    """Check RBAC status and list roles."""
+    return {"enabled": is_rbac_enabled(), "roles": ROLES}
+
+
+@app.post("/api/admin/keys")
+async def create_key(body: dict):
+    """Create a new API key. Requires admin role when RBAC is enabled."""
+    name = body.get("name", "")
+    role = body.get("role", "viewer")
+    if not name:
+        raise HTTPException(400, "Missing 'name' field")
+    try:
+        result = await create_api_key(name, role)
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/admin/keys")
+async def list_keys():
+    """List all API keys (without secrets)."""
+    return {"keys": await list_api_keys()}
+
+
+@app.post("/api/admin/keys/{key_id}/revoke")
+async def revoke_key(key_id: int):
+    """Revoke an API key."""
+    if await revoke_api_key(key_id):
+        return {"revoked": True, "id": key_id}
+    raise HTTPException(404, "Key not found")
+
+
+@app.delete("/api/admin/keys/{key_id}")
+async def delete_key(key_id: int):
+    """Permanently delete an API key."""
+    if await delete_api_key(key_id):
+        return {"deleted": True, "id": key_id}
+    raise HTTPException(404, "Key not found")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REPORTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/reports")
+async def list_reports_endpoint(limit: int = 10):
+    """List recent generated reports."""
+    return {"reports": get_recent_reports(limit)}
+
+
+@app.post("/api/reports/generate")
+async def generate_report_endpoint(body: dict, db: AsyncSession = Depends(get_db)):
+    """Generate a report on demand. Body: {period: "daily"|"weekly"|"monthly"}"""
+    period = body.get("period", "daily")
+    report = await generate_report(period, db)
+    return report
+
+
+@app.get("/api/reports/{index}/html", response_class=HTMLResponse)
+async def get_report_html(index: int):
+    """Get a report's HTML content by index."""
+    reports = get_recent_reports(100)
+    if index < 0 or index >= len(_recent_reports):
+        raise HTTPException(404, "Report not found")
+    return HTMLResponse(_recent_reports[index].get("html", "<h1>No HTML</h1>"))
+
+
+@app.post("/api/reports/email")
+async def email_report(body: dict, db: AsyncSession = Depends(get_db)):
+    """Generate and email a report. Body: {period, recipients?: [...]}"""
+    period = body.get("period", "daily")
+    recipients = body.get("recipients", [])
+    report = await generate_report(period, db)
+    result = send_report_email(report, recipients if recipients else None)
+    return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# JIRA INTEGRATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/integrations/jira/status")
+async def jira_status():
+    """Check Jira integration status."""
+    return {"configured": jira_integration.is_configured(), "url": jira_integration.JIRA_URL or None}
+
+
+@app.post("/api/integrations/jira/tickets")
+async def create_jira_ticket(body: dict):
+    """Create a Jira ticket from an incident. Body: {incident: {...}, rca?: {...}}"""
+    return await jira_integration.create_ticket(body.get("incident", body), body.get("rca"))
+
+
+@app.post("/api/integrations/jira/webhook")
+async def jira_webhook(payload: dict):
+    """Receive Jira webhook events for bidirectional sync."""
+    return await jira_integration.handle_jira_webhook(payload)
+
+
+@app.get("/api/integrations/jira/tickets/{jira_key}")
+async def get_jira_ticket(jira_key: str):
+    """Fetch a Jira ticket."""
+    return await jira_integration.get_ticket(jira_key)
+
+
+@app.get("/api/integrations/jira/search")
+async def search_jira(jql: Optional[str] = None):
+    """Search Jira tickets. Uses default JQL if none provided."""
+    return await jira_integration.search_tickets(jql or f"project = {jira_integration.JIRA_PROJECT} AND labels = pulse ORDER BY created DESC")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SERVICENOW INTEGRATION
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/integrations/servicenow/status")
+async def servicenow_status():
+    """Check ServiceNow integration status."""
+    return {"configured": servicenow.is_configured(), "instance": servicenow.SNOW_INSTANCE or None}
+
+
+@app.post("/api/integrations/servicenow/incidents")
+async def create_snow_incident(body: dict):
+    """Create a ServiceNow incident. Body: {incident: {...}, rca?: {...}}"""
+    return await servicenow.create_incident(body.get("incident", body), body.get("rca"))
+
+
+@app.post("/api/integrations/servicenow/webhook")
+async def servicenow_webhook(payload: dict):
+    """Receive ServiceNow webhook events."""
+    return await servicenow.handle_webhook(payload)
+
+
+@app.get("/api/integrations/servicenow/incidents/{sys_id}")
+async def get_snow_incident(sys_id: str):
+    """Fetch a ServiceNow incident."""
+    return await servicenow.get_incident_by_sysid(sys_id)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INTEGRATIONS OVERVIEW
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/integrations")
+async def list_integrations():
+    """List all available integrations and their status."""
+    return {
+        "integrations": {
+            "jira":       {"configured": jira_integration.is_configured(), "type": "ITSM"},
+            "servicenow": {"configured": servicenow.is_configured(), "type": "ITSM"},
+            "rbac":       {"enabled": is_rbac_enabled(), "type": "Security"},
+        }
+    }
+
+
 @app.get("/api/stats")
 async def stats(db: AsyncSession = Depends(get_db)):
     nodes_count      = (await db.execute(select(func.count(Node.id)))).scalar()
@@ -978,6 +1223,11 @@ async def stats(db: AsyncSession = Depends(get_db)):
     synthetic_up = sum(1 for r in get_synthetic_results() if r.get("status") == "up")
     synthetic_total = len(get_synthetic_results())
     anomaly_count = len(get_recent_anomalies(limit=100))
+
+    slo_status_all = get_slo_status()
+    slos_met = sum(1 for v in slo_status_all.values() if v.get("status") == "met")
+    slos_total = len(slo_status_all)
+    predictions_count = len(get_predictions(limit=100))
 
     return {
         "nodes":             nodes_count,
@@ -992,7 +1242,13 @@ async def stats(db: AsyncSession = Depends(get_db)):
         "synthetic_total":   synthetic_total,
         "monitored_dbs":     len(get_db_results()),
         "anomalies_24h":     anomaly_count,
-        "version":           "3.0.0",
+        "slos_met":          slos_met,
+        "slos_total":        slos_total,
+        "predictions_24h":   predictions_count,
+        "rbac_enabled":      is_rbac_enabled(),
+        "jira_connected":    jira_integration.is_configured(),
+        "servicenow_connected": servicenow.is_configured(),
+        "version":           "4.0.0",
     }
 
 
