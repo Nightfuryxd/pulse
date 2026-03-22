@@ -1,0 +1,36 @@
+# Synthetic Monitoring — URL/API health checks
+# PULSE will probe these endpoints at the configured interval
+# and alert if they fail or respond slowly.
+
+targets:
+  # - id: pulse-api
+  #   url: http://pulse-api:8000/health
+  #   method: GET
+  #   interval_seconds: 30
+  #   timeout_seconds: 10
+  #   expected_status: 200
+  #   expected_body: "ok"          # optional: response must contain this string
+  #   check_ssl: false
+  #   severity: critical           # alert severity on failure
+  #   teams: [infra]
+
+  # - id: google-dns
+  #   url: https://dns.google/resolve?name=example.com
+  #   method: GET
+  #   interval_seconds: 60
+  #   timeout_seconds: 5
+  #   expected_status: 200
+  #   check_ssl: true
+  #   ssl_warn_days: 30            # alert if SSL cert expires within N days
+  #   severity: high
+
+  # - id: company-website
+  #   url: https://example.com
+  #   method: GET
+  #   interval_seconds: 60
+  #   timeout_seconds: 10
+  #   expected_status: 200
+  #   check_ssl: true
+  #   ssl_warn_days: 14
+  #   severity: critical
+  #   teams: [infra, appdev]

@@ -1,0 +1,31 @@
+# Database Monitoring — track query performance, connections, replication
+# PULSE will poll these databases and send metrics to the API.
+
+targets:
+  # - id: main-postgres
+  #   type: postgres
+  #   dsn: postgresql://monitor:password@postgres:5432/pulse
+  #   interval_seconds: 30
+  #   collect:
+  #     - active_connections
+  #     - slow_queries          # queries > slow_query_ms
+  #     - table_sizes
+  #     - replication_lag
+  #     - cache_hit_ratio
+  #     - dead_tuples
+  #   slow_query_ms: 1000
+  #   severity: high
+  #   teams: [infra]
+
+  # - id: cache-redis
+  #   type: redis
+  #   url: redis://redis:6379
+  #   interval_seconds: 30
+  #   collect:
+  #     - memory_usage
+  #     - connected_clients
+  #     - keyspace_stats
+  #     - evicted_keys
+  #     - hit_rate
+  #   severity: medium
+  #   teams: [infra]

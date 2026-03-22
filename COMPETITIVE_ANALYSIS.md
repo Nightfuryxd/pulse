@@ -12,20 +12,20 @@
 | **Servers (Linux/Win/Mac)** | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (exporters) | Yes |
 | **Network (SNMP)** | Yes (v2c) | Yes (NPM) | Yes (basic) | Limited | Yes (deep) | Yes (deep) | Yes (plugins) | Yes (v1/v2c/v3) | Yes (v1/v2c/v3) | Yes (exporter) | Yes (deep) |
 | **SNMP v3** | No | Yes | Yes | Limited | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Containers (Docker)** | No | Yes | Yes | Yes | Basic | Basic | No | Yes | Yes | Yes (cAdvisor) | No |
-| **Kubernetes** | No | Yes (deep) | Yes (deep+Pixie) | Yes (deep) | No | No | No | Basic | Good | Yes (native) | No |
+| **Containers (Docker)** | Yes (agent) | Yes | Yes | Yes | Basic | Basic | No | Yes | Yes | Yes (cAdvisor) | No |
+| **Kubernetes** | Yes (pods/nodes/deploy) | Yes (deep) | Yes (deep+Pixie) | Yes (deep) | No | No | No | Basic | Good | Yes (native) | No |
 | **Cloud - AWS** | No | 100+ svcs | 80+ svcs | 80+ svcs | Shallow | Basic | Minimal | Moderate | 30+ svcs | Yes (exporters) | Basic |
 | **Cloud - Azure** | No | 80+ svcs | 40+ svcs | 60+ svcs | Shallow | Basic | Minimal | Moderate | 20+ svcs | Yes (plugin) | Basic |
 | **Cloud - GCP** | No | 40+ svcs | 30+ svcs | 40+ svcs | Minimal | Minimal | Minimal | Basic | 15+ svcs | Yes (exporter) | Limited |
-| **APM / Tracing** | No | Yes (deep) | Yes (deep) | Yes (deepest) | No | No | No | No | No | Yes (Tempo) | No |
-| **Log Management** | No | Yes (mature) | Yes (NRDB) | Yes (Grail) | Separate product | Near-none | Separate product | Basic (agent) | Event Console | Yes (Loki) | No |
-| **Synthetic Monitoring** | No | Yes | Yes | Yes | Separate (WPM) | Yes (HTTP) | Yes (basic) | Yes (web scenarios) | Basic | Yes (Blackbox) | Yes (URL) |
+| **APM / Tracing** | Yes (OTel+SDK) | Yes (deep) | Yes (deep) | Yes (deepest) | No | No | No | No | No | Yes (Tempo) | No |
+| **Log Management** | Yes (ingest+search) | Yes (mature) | Yes (NRDB) | Yes (Grail) | Separate product | Near-none | Separate product | Basic (agent) | Event Console | Yes (Loki) | No |
+| **Synthetic Monitoring** | Yes (HTTP+SSL) | Yes | Yes | Yes | Separate (WPM) | Yes (HTTP) | Yes (basic) | Yes (web scenarios) | Basic | Yes (Blackbox) | Yes (URL) |
 | **RUM (Browser/Mobile)** | No | Yes | Yes | Yes | No | No | No | No | No | Early (Faro) | No |
-| **Database Monitoring** | No | Yes (query-level) | Yes | Yes | Separate (DPA) | Yes (sensors) | Yes (plugins) | Yes (agent 2) | Yes | Yes (exporters) | Basic |
+| **Database Monitoring** | Yes (PG/Redis) | Yes (query-level) | Yes | Yes | Separate (DPA) | Yes (sensors) | Yes (plugins) | Yes (agent 2) | Yes | Yes (exporters) | Basic |
 | **AI Root Cause Analysis** | Yes (GPT/Ollama) | Yes (Watchdog) | Yes (Applied Intel) | Yes (Davis - best) | No | No | No | No | No | Cloud only (Sift) | No |
-| **Anomaly Detection** | No | Yes (ML) | Yes (ML) | Yes (Davis) | Basic baselines | No | No | Basic (forecast) | Yes (Enterprise) | Cloud only | No |
-| **Noise Reduction** | No | Yes | Yes (correlation) | Yes (95%+ claim) | No | No | No | No | No | No | No |
-| **Auto-Remediation** | No | Yes (Workflows) | Weak | Yes (strongest) | Script-based | Script-based | Event handlers | Remote commands | Handlers+Ansible | No | Yes (scripts) |
+| **Anomaly Detection** | Yes (z-score) | Yes (ML) | Yes (ML) | Yes (Davis) | Basic baselines | No | No | Basic (forecast) | Yes (Enterprise) | Cloud only | No |
+| **Noise Reduction** | Yes (correlation) | Yes | Yes (correlation) | Yes (95%+ claim) | No | No | No | No | No | No | No |
+| **Auto-Remediation** | Yes (playbooks) | Yes (Workflows) | Weak | Yes (strongest) | Script-based | Script-based | Event handlers | Remote commands | Handlers+Ansible | No | Yes (scripts) |
 | **Air-Gapped Deploy** | Yes | No (SaaS only) | No (SaaS only) | Yes (Managed) | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Agent Install** | Yes (1-liner) | Yes | Yes | Yes (OneAgent) | Yes | Yes | Yes | Yes | Yes (bakery) | Yes (Alloy) | Optional |
 | **SSH Agentless** | Yes | No | No | No | Yes | No | Yes | Yes | No | No | Yes |
@@ -34,8 +34,8 @@
 | **War Room / Collab** | Yes (Slack+Teams) | No | No | No | No | No | No | No | No | Grafana Incident | No |
 | **Team Auto-Routing** | Yes | No | No | No | No | No | No | No | No | No | No |
 | **Detection Rules (YAML)** | Yes | Yes (monitors) | Yes (NRQL alerts) | Yes (Davis auto) | Yes (complex) | Yes (thresholds) | Yes (config) | Yes (triggers) | Yes (rules) | Yes (PromQL) | Yes |
-| **OpenTelemetry** | No | Yes (ingest) | Yes (first-class) | Yes (ingest) | No | No | No | Experimental | No | Yes (native) | No |
-| **Total Integrations** | ~2 | 800+ | 700+ | 600+ | 200+ | 250+ | 4000+ plugins | 1000+ templates | 1800+ checks | 500+ exporters | 200+ |
+| **OpenTelemetry** | Yes (OTLP HTTP) | Yes (ingest) | Yes (first-class) | Yes (ingest) | No | No | No | Experimental | No | Yes (native) | No |
+| **Total Integrations** | 13+ providers | 800+ | 700+ | 600+ | 200+ | 250+ | 4000+ plugins | 1000+ templates | 1800+ checks | 500+ exporters | 200+ |
 | **Free Tier** | Yes (full) | 5 hosts | 100GB/mo + 1 user | 15-day trial | No | 100 sensors | Core (OSS) | Full (OSS) | Raw (OSS) | Full (OSS) | 3 devices |
 
 ---
@@ -46,19 +46,19 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **Slack** | Yes | Yes | Yes | Yes | Webhook | Template | Plugin | Official | Built-in | Yes | Webhook |
 | **Microsoft Teams** | Yes | Yes | Yes | Yes | Webhook | Webhook | Webhook | Official | Built-in | Yes | Webhook |
-| **Discord** | No | No | No | No | No | No | No | Official | No | Yes | No |
-| **Google Chat** | No | Webhook | Webhook | No | No | No | No | Community | No | Yes | No |
-| **Telegram** | No | No | No | No | No | No | No | Official | Community | Yes | No |
-| **Zoom** | No | No | No | No | No | No | No | No | No | No | No |
+| **Discord** | Yes | No | No | No | No | No | No | Official | No | Yes | No |
+| **Google Chat** | Yes | Webhook | Webhook | No | No | No | No | Community | No | Yes | No |
+| **Telegram** | Yes | No | No | No | No | No | No | Official | Community | Yes | No |
+| **Zoom** | Yes | No | No | No | No | No | No | No | No | No | No |
 | **Webex** | No | No | No | No | No | No | No | No | Built-in | Yes | No |
-| **PagerDuty** | No | Yes | Yes | Yes | Webhook | Webhook | Plugin | Official | Built-in | Yes | Webhook |
-| **Opsgenie** | No | Yes | Yes | Yes | No | No | Community | Official | Built-in | Yes | No |
+| **PagerDuty** | Yes | Yes | Yes | Yes | Webhook | Webhook | Plugin | Official | Built-in | Yes | Webhook |
+| **Opsgenie** | Yes | Yes | Yes | Yes | No | No | Community | Official | Built-in | Yes | No |
 | **VictorOps/Splunk** | No | Yes | Yes | Yes | No | No | Community | No | Built-in | Yes | No |
 | **ServiceNow** | No | Yes | Yes | Yes (deep) | Yes | No | Plugin | Webhook | REST | No | Yes |
 | **Jira** | No | Yes | Yes | Yes | Plugin | No | Plugin | Official (bidi) | REST | No | No |
-| **Email (SMTP)** | No | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| **SMS** | No | Via PD/OG | Via PD/OG | Via PD/OG | Gateway | Modem | Twilio | Modem/script | Native | Via OnCall | Gateway |
-| **Webhooks (Generic)** | No | Yes | Yes | Yes | Yes | Yes | Custom cmd | Yes | Yes | Yes | Yes |
+| **Email (SMTP)** | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **SMS** | Yes (Twilio) | Via PD/OG | Via PD/OG | Via PD/OG | Gateway | Modem | Twilio | Modem/script | Native | Via OnCall | Gateway |
+| **Webhooks (Generic)** | Yes | Yes | Yes | Yes | Yes | Yes | Custom cmd | Yes | Yes | Yes | Yes |
 | **Phone Call (Voice)** | No | Via PD | Via PD | Via PD | No | No | No | No | No | Via OnCall | No |
 | **Amazon SNS** | No | Yes | No | No | No | Yes | No | No | No | Yes | No |
 | **Kafka** | No | No | No | No | No | No | No | No | No | Yes | No |
@@ -69,31 +69,31 @@
 
 ### CRITICAL GAPS (Must Build)
 
-| # | Gap | Why It Matters | Who Has It |
-|---|-----|---------------|-----------|
-| 1 | **Kubernetes/Container Monitoring** | Cloud-native is now default. K8s pods, nodes, deployments, services, HPA | Datadog, New Relic, Dynatrace, Grafana, Zabbix, Checkmk |
-| 2 | **Cloud Provider Integrations (AWS/Azure/GCP)** | Most infrastructure runs in cloud. Need API-based metric collection | All competitors |
-| 3 | **APM / Distributed Tracing** | Code-level visibility is table stakes for modern apps. OpenTelemetry ingest | Datadog, New Relic, Dynatrace, Grafana (Tempo) |
-| 4 | **Log Management** | Third pillar of observability. Collect, index, search, correlate with metrics | Datadog, New Relic, Dynatrace, Grafana (Loki) |
-| 5 | **OpenTelemetry Support** | Industry standard. Accept OTLP for metrics, traces, logs | Datadog, New Relic, Dynatrace, Grafana |
-| 6 | **SNMP v3** | Required for enterprise/gov security compliance | All except PULSE |
-| 7 | **Email Alerts** | Most basic alerting channel. Every competitor has it | All except PULSE |
-| 8 | **Generic Webhooks** | Enables any integration without custom code | All except PULSE |
-| 9 | **Anomaly Detection (ML)** | Static thresholds miss slow degradation. Need baseline learning | Datadog, New Relic, Dynatrace, Checkmk |
-| 10 | **Communication Integrations** | Need: Discord, Telegram, Google Chat, Zoom, PagerDuty, Opsgenie, Jira, ServiceNow, SMS, webhooks, email | Various (see matrix) |
+| # | Gap | Why It Matters | Status |
+|---|-----|---------------|--------|
+| 1 | **Kubernetes/Container Monitoring** | Cloud-native is now default | DONE (Phase 2) — pods, nodes, deployments, DaemonSet, RBAC |
+| 2 | **Cloud Provider Integrations (AWS/Azure/GCP)** | Most infrastructure runs in cloud | DONE (Phase 1) — collectors exist, need API keys |
+| 3 | **APM / Distributed Tracing** | Code-level visibility is table stakes | DONE (Phase 2) — OTel + SDK span ingest |
+| 4 | **Log Management** | Third pillar of observability | DONE (Phase 2) — ingest, search, trace correlation |
+| 5 | **OpenTelemetry Support** | Industry standard | DONE (Phase 2) — OTLP/HTTP for metrics, traces, logs |
+| 6 | **SNMP v3** | Required for enterprise/gov security compliance | Pending |
+| 7 | **Email Alerts** | Most basic alerting channel | DONE (Phase 1) — SMTP provider |
+| 8 | **Generic Webhooks** | Enables any integration without custom code | DONE (Phase 1) — webhook provider |
+| 9 | **Anomaly Detection (ML)** | Static thresholds miss slow degradation | DONE (Phase 2) — z-score baselines |
+| 10 | **Communication Integrations** | Discord, Telegram, Google Chat, Zoom, PagerDuty, etc. | DONE (Phase 1) — 13 providers |
 
 ### HIGH-PRIORITY GAPS
 
-| # | Gap | Why It Matters | Who Has It |
-|---|-----|---------------|-----------|
-| 11 | **Database Monitoring** | Query-level visibility for Postgres, MySQL, MongoDB, Redis, Elasticsearch | Datadog (best), New Relic, Dynatrace |
-| 12 | **Synthetic Monitoring / URL Checks** | Uptime monitoring, SSL cert expiry, API health checks | Datadog, New Relic, PRTG, Zabbix |
-| 13 | **Auto-Remediation / Runbooks** | Auto-fix known issues (restart services, clear disk, scale resources) | Dynatrace (best), Datadog, ManageEngine, SolarWinds |
-| 14 | **Noise Reduction / Alert Correlation** | Group related alerts into single incidents. Reduce alert fatigue | Dynatrace (Davis), Datadog (Watchdog), New Relic |
-| 15 | **Mobile App** | Engineers need alerts and dashboards on phone | PRTG, Datadog, New Relic, PagerDuty |
-| 16 | **Multi-Step Escalation** | If not acknowledged in 5min, escalate to manager, then VP | All major tools |
-| 17 | **Maintenance Windows** | Suppress alerts during planned maintenance | All major tools |
-| 18 | **Dashboard Customization** | Drag-and-drop widgets, custom time ranges, saved views | Grafana (best), Datadog, all |
+| # | Gap | Why It Matters | Status |
+|---|-----|---------------|--------|
+| 11 | **Database Monitoring** | Query-level visibility for Postgres, MySQL, Redis | DONE (Phase 2) — connections, slow queries, cache hit ratio |
+| 12 | **Synthetic Monitoring / URL Checks** | Uptime monitoring, SSL cert expiry | DONE (Phase 2) — HTTP probes + SSL cert expiry |
+| 13 | **Auto-Remediation / Runbooks** | Auto-fix known issues | DONE (Phase 1) — playbook engine |
+| 14 | **Noise Reduction / Alert Correlation** | Group related alerts into single incidents | DONE (Phase 1) — correlate.py |
+| 15 | **Mobile App** | Engineers need alerts and dashboards on phone | Pending |
+| 16 | **Multi-Step Escalation** | If not acknowledged in 5min, escalate | DONE (Phase 1) — escalation.py |
+| 17 | **Maintenance Windows** | Suppress alerts during planned maintenance | DONE (Phase 1) — maintenance.yaml + API |
+| 18 | **Dashboard Customization** | Drag-and-drop widgets, custom time ranges | Pending — basic WebSocket dashboard exists |
 
 ### MEDIUM-PRIORITY GAPS
 

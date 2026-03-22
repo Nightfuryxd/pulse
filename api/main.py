@@ -35,9 +35,14 @@ from knowledge import (
     add_entry, update_entry, delete_entry, get_all, get_entry,
     search, import_markdown, import_bulk, load_from_config
 )
+from synthetic import synthetic_loop, get_synthetic_results, get_synthetic_targets
+from dbmonitor import dbmonitor_loop, get_db_results, get_db_targets
+from anomaly import evaluate_metric as anomaly_evaluate, get_baselines, get_recent_anomalies
+from otel import router as otel_router
 
-app = FastAPI(title="PULSE", version="2.0.0", description="AI-powered unified infrastructure intelligence")
+app = FastAPI(title="PULSE", version="3.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.include_router(otel_router)
 
 
 # ── WebSocket manager ─────────────────────────────────────────────────────────
@@ -78,7 +83,9 @@ async def startup():
     await init_db()
     load_from_config()
     asyncio.create_task(escalation_loop())
-    print("[PULSE] API v2.0 ready — notification engine loaded")
+    asyncio.create_task(synthetic_loop())
+    asyncio.create_task(dbmonitor_loop())
+    print("[PULSE] API v3.0 ready — Phase 2: synthetic, DB monitor, anomaly, OTel")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -176,7 +183,7 @@ class KBMarkdownImport(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "ts": datetime.utcnow().isoformat(), "version": "2.0"}
+    return {"status": "ok", "ts": datetime.utcnow().isoformat(), "version": "3.0"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -259,6 +266,11 @@ async def ingest_metrics(
         background_tasks.add_task(_process_connections, payload.node_id, payload.connections)
 
     background_tasks.add_task(_run_metric_detection, payload.node_id, m_dict, db)
+
+    # Anomaly detection — feeds into baseline and checks for deviations
+    anomaly_events = anomaly_evaluate(payload.node_id, m_dict)
+    for ae in anomaly_events:
+        background_tasks.add_task(_run_event_detection, payload.node_id, ae, db)
 
     await ws_manager.broadcast({"type": "metric", "node_id": payload.node_id, "data": m_dict})
     return {"accepted": True}
@@ -906,6 +918,54 @@ async def list_events(
     ]}
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SYNTHETIC MONITORING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/synthetic")
+async def list_synthetic():
+    """Get current synthetic monitoring probe results."""
+    return {"targets": get_synthetic_targets(), "results": get_synthetic_results()}
+
+
+@app.get("/api/synthetic/results")
+async def synthetic_results():
+    """Latest probe results only."""
+    return {"results": get_synthetic_results()}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DATABASE MONITORING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/databases")
+async def list_databases():
+    """Get database monitoring results."""
+    return {"targets": get_db_targets(), "results": get_db_results()}
+
+
+@app.get("/api/databases/results")
+async def database_results():
+    """Latest database metrics only."""
+    return {"results": get_db_results()}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ANOMALY DETECTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/anomalies")
+async def list_anomalies(node_id: Optional[str] = None, limit: int = 50):
+    """Get recent anomalies detected by baseline analysis."""
+    return {"anomalies": get_recent_anomalies(node_id, limit)}
+
+
+@app.get("/api/anomalies/baselines")
+async def list_baselines(node_id: Optional[str] = None):
+    """Get learned metric baselines per node."""
+    return {"baselines": get_baselines(node_id)}
+
+
 @app.get("/api/stats")
 async def stats(db: AsyncSession = Depends(get_db)):
     nodes_count      = (await db.execute(select(func.count(Node.id)))).scalar()
@@ -914,6 +974,10 @@ async def stats(db: AsyncSession = Depends(get_db)):
     open_incidents   = (await db.execute(select(func.count(Incident.id)).where(Incident.status == "open"))).scalar()
     total_logs       = (await db.execute(select(func.count(Log.id)))).scalar()
     kb_entries       = len(get_all())
+
+    synthetic_up = sum(1 for r in get_synthetic_results() if r.get("status") == "up")
+    synthetic_total = len(get_synthetic_results())
+    anomaly_count = len(get_recent_anomalies(limit=100))
 
     return {
         "nodes":             nodes_count,
@@ -924,6 +988,11 @@ async def stats(db: AsyncSession = Depends(get_db)):
         "kb_entries":        kb_entries,
         "connected_clients": len(ws_manager.connections),
         "topology_edges":    len(topo.get_full_graph().get("edges", [])),
+        "synthetic_up":      synthetic_up,
+        "synthetic_total":   synthetic_total,
+        "monitored_dbs":     len(get_db_results()),
+        "anomalies_24h":     anomaly_count,
+        "version":           "3.0.0",
     }
 
 

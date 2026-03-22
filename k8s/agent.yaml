@@ -32,6 +32,8 @@ spec:
               value: "http://pulse-api:8000"   # Points to the API Service
             - name: COLLECT_INTERVAL
               value: "10"
+            - name: ENABLE_K8S
+              value: "true"                    # Collect K8s pod/node/deployment metrics
           resources:
             requests:
               memory: "64Mi"
@@ -55,6 +57,7 @@ spec:
         - name: sys
           hostPath:
             path: /sys
+      serviceAccountName: pulse-agent   # RBAC — gives access to K8s API
       # TOLERATIONS — run even on master/control-plane nodes
       # By default K8s doesn't schedule workloads on master nodes
       # But we want to monitor EVERYTHING

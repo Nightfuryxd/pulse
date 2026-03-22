@@ -396,14 +396,20 @@ pulse/
 │   ├── correlate.py      ← Groups related alerts together
 │   ├── topology.py       ← Service dependency mapping
 │   ├── remediate.py      ← Auto-fix playbooks (restart services, etc.)
-│   └── knowledge.py      ← Knowledge base for RCA context
+│   ├── knowledge.py      ← Knowledge base for RCA context
+│   ├── synthetic.py      ← HTTP health checks + SSL cert monitoring
+│   ├── dbmonitor.py      ← PostgreSQL/Redis query-level monitoring
+│   ├── anomaly.py        ← Z-score baseline anomaly detection
+│   └── otel.py           ← OpenTelemetry OTLP receiver
 ├── agent/
 │   └── collector.py      ← Runs on each server, collects metrics, sends to API
 ├── config/
 │   ├── rules.yaml        ← Detection rules (when to fire alerts)
 │   ├── teams.yaml        ← Team definitions + notification channels
 │   ├── escalation.yaml   ← Escalation policies
-│   └── maintenance.yaml  ← Maintenance windows
+│   ├── maintenance.yaml  ← Maintenance windows
+│   ├── synthetic.yaml    ← URL/API monitoring targets
+│   └── databases.yaml    ← Database monitoring targets
 ├── dashboard/
 │   └── index.html        ← Real-time web dashboard
 ├── mcp/
@@ -415,7 +421,8 @@ pulse/
 │   ├── postgres.yaml     ← Database: PVC + Deployment + Service
 │   ├── redis.yaml        ← Cache: Deployment + Service
 │   ├── api.yaml          ← API: Deployment (2 replicas) + NodePort Service
-│   └── agent.yaml        ← Agent: DaemonSet (1 per node)
+│   ├── agent.yaml        ← Agent: DaemonSet (1 per node)
+│   └── rbac.yaml         ← ServiceAccount + permissions for K8s API access
 ├── docker-compose.yml    ← Dev environment (ties containers together)
 ├── .env                  ← Your secrets (API keys, passwords) — NEVER commit this
 └── .env.example          ← Template showing what secrets are needed
@@ -423,7 +430,78 @@ pulse/
 
 ---
 
-## 11. One-Liners to Remember
+## 11. Phase 2 — Observability Pillars
+
+### Synthetic Monitoring (`api/synthetic.py`)
+
+**What it does:** Probes URLs/APIs on a schedule to check if they're up, fast, and have valid SSL certs.
+
+**Why it matters:** Your users shouldn't be the first to know your site is down. Synthetic checks catch outages before users do.
+
+```yaml
+# config/synthetic.yaml
+targets:
+  - id: company-api
+    url: https://api.example.com/health
+    interval_seconds: 30
+    expected_status: 200
+    check_ssl: true
+    ssl_warn_days: 14    # Alert 2 weeks before cert expires
+```
+
+PULSE checks each target and generates events for: timeouts, wrong status codes, slow responses, and expiring SSL certs.
+
+### Database Monitoring (`api/dbmonitor.py`)
+
+**What it does:** Connects to PostgreSQL and Redis, collects query performance, connection counts, cache stats, and replication lag.
+
+**Why it matters:** "The app is slow" is often "the database is slow." You need to see inside the database to find the bottleneck.
+
+Key metrics collected:
+- **PostgreSQL:** active connections, slow queries, cache hit ratio, table sizes, dead tuples, replication lag
+- **Redis:** memory usage, connected clients, evicted keys, hit rate, ops/second
+
+### Anomaly Detection (`api/anomaly.py`)
+
+**What it does:** Learns what "normal" looks like for each metric on each server, then alerts when values deviate significantly.
+
+**How it works — Z-Score:**
+```
+1. Collect 30+ data points (baseline)
+2. Calculate mean and standard deviation
+3. For each new value: z-score = (value - mean) / std_dev
+4. If |z-score| > 3 → anomaly alert
+```
+
+**Example:** CPU normally at 20% (std=5%). A spike to 55% has z-score = (55-20)/5 = 7 → anomaly.
+
+Static threshold (e.g., alert at 95%) would miss this. Anomaly detection catches it because 55% is abnormal *for this server*.
+
+### OpenTelemetry (`api/otel.py`)
+
+**What it is:** The industry standard for instrumenting applications. Any app using OpenTelemetry can send metrics, traces, and logs to PULSE.
+
+**Why it matters:** Instead of writing custom integrations for every language/framework, apps just use the OTel SDK and point it at PULSE. One protocol, every language.
+
+**Endpoints:**
+```
+POST /v1/traces   → App sends distributed traces (spans)
+POST /v1/metrics  → App sends custom metrics
+POST /v1/logs     → App sends structured logs
+```
+
+**The Three Pillars of Observability:**
+```
+Metrics  → "What is happening?" (CPU at 95%, response time 500ms)
+Logs     → "What happened?" (error messages, debug output)
+Traces   → "Where did it happen?" (request flow across services)
+```
+
+PULSE now has all three. This is what makes it a complete observability platform, not just a monitoring tool.
+
+---
+
+## 12. One-Liners to Remember
 
 ```bash
 # "Is PULSE alive?"

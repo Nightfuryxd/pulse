@@ -1,0 +1,43 @@
+# RBAC — gives the pulse-agent permission to read K8s API
+# Without this, the agent can't list pods, nodes, deployments, etc.
+#
+# ServiceAccount → ClusterRole → ClusterRoleBinding
+# Think of it like: "user account" → "permission list" → "assign permissions to user"
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pulse-agent
+  namespace: pulse
+
+---
+# ClusterRole — what permissions are granted (cluster-wide, not per-namespace)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pulse-agent-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "services", "events", "namespaces", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "daemonsets", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding — connects the ServiceAccount to the ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pulse-agent-reader-binding
+subjects:
+  - kind: ServiceAccount
+    name: pulse-agent
+    namespace: pulse
+roleRef:
+  kind: ClusterRole
+  name: pulse-agent-reader
+  apiGroup: rbac.authorization.k8s.io
