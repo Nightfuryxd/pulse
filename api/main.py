@@ -12,9 +12,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ from pathlib import Path
 load_dotenv()
 
 from db import init_db, get_db, Node, Metric, Event, Alert, Incident, Log, ServiceEdge, Span, PlaybookRun
-from detection import evaluate_metric, evaluate_event
+from detection import evaluate_metric, evaluate_event, get_all_rules, get_rule, create_rule, update_rule, delete_rule
 from rca import analyse_incident
 from router import route_incident, bridge_incident
 from escalation import escalation_loop, acknowledge_incident, is_in_maintenance, add_maintenance_window, remove_maintenance_window, get_active_maintenance_windows
@@ -42,14 +42,25 @@ from otel import router as otel_router
 from slo import slo_loop, get_slos, get_slo_status, get_slo_breaches, evaluate_all_slos, feed_metric as slo_feed_metric
 from predict import feed_metric as predict_feed, check_predictions, get_predictions, get_forecasts, get_forecast_for_metric
 from rbac import rbac_middleware, create_api_key, list_api_keys, revoke_api_key, delete_api_key, is_rbac_enabled, ROLES
+from auth import (
+    signup, login as auth_login, get_user, update_user, complete_onboarding,
+    auth_middleware, get_current_user_from_request, AUTH_PUBLIC_PATHS, AUTH_PUBLIC_PREFIXES
+)
 from reports import report_loop, generate_report, send_report_email, get_recent_reports, _recent_reports
 from nlquery import execute_query as nl_execute_query
 import jira_integration
 import servicenow
+import dashboards as dash_mod
+import oncall as oncall_mod
+import statuspage as sp_mod
+import notifcenter as notif_mod
+import servicecatalog as catalog_mod
+import workflows as wf_mod
 
 app = FastAPI(title="PULSE", version="4.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.middleware("http")(rbac_middleware)
+app.middleware("http")(auth_middleware)
 app.include_router(otel_router)
 
 
@@ -203,6 +214,94 @@ async def dashboard():
     if p.exists():
         return p.read_text()
     return HTMLResponse("<h1>PULSE running — dashboard not found</h1>")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUTH PAGES + API
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    p = Path(__file__).parent.parent / "dashboard" / "login.html"
+    if p.exists():
+        return HTMLResponse(p.read_text())
+    return HTMLResponse("<h1>Login page not found</h1>")
+
+
+@app.get("/onboarding", response_class=HTMLResponse)
+async def onboarding_page():
+    p = Path(__file__).parent.parent / "dashboard" / "onboarding.html"
+    if p.exists():
+        return HTMLResponse(p.read_text())
+    return HTMLResponse("<h1>Onboarding page not found</h1>")
+
+
+@app.post("/api/auth/login")
+async def api_login(body: dict):
+    email = body.get("email", "")
+    password = body.get("password", "")
+    if not email or not password:
+        raise HTTPException(400, "Email and password required")
+    try:
+        result = await auth_login(email, password)
+        return result
+    except ValueError as e:
+        raise HTTPException(401, str(e))
+
+
+@app.post("/api/auth/signup")
+async def api_signup(body: dict):
+    email = body.get("email", "")
+    password = body.get("password", "")
+    name = body.get("name", "")
+    org_name = body.get("org_name", "My Organization")
+    if not email or not password:
+        raise HTTPException(400, "Email and password required")
+    try:
+        result = await signup(email, password, name, org_name)
+        return result
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/auth/me")
+async def api_auth_me(request: Request):
+    user_payload = get_current_user_from_request(request)
+    if not user_payload:
+        raise HTTPException(401, "Not authenticated")
+    user = await get_user(int(user_payload["sub"]))
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+
+@app.post("/api/auth/onboarding/complete")
+async def api_complete_onboarding(request: Request, body: dict):
+    user_payload = get_current_user_from_request(request)
+    if not user_payload:
+        raise HTTPException(401, "Not authenticated")
+    user_id = int(user_payload["sub"])
+    # Save thresholds and channels as user settings
+    updates = {"onboarded": True}
+    settings = {}
+    if "thresholds" in body:
+        settings["thresholds"] = body["thresholds"]
+    if "channels" in body:
+        settings["channels"] = body["channels"]
+    if settings:
+        updates["settings"] = settings
+    result = await update_user(user_id, updates)
+    return result
+
+
+@app.put("/api/auth/settings")
+async def api_update_settings(request: Request, body: dict):
+    user_payload = get_current_user_from_request(request)
+    if not user_payload:
+        raise HTTPException(401, "Not authenticated")
+    user_id = int(user_payload["sub"])
+    result = await update_user(user_id, body)
+    return result
 
 
 @app.get("/agent/collector.py", response_class=PlainTextResponse)
@@ -962,6 +1061,50 @@ async def synthetic_results():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ALERT RULES (CRUD)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/rules")
+async def list_rules():
+    """List all alert rules."""
+    return {"rules": get_all_rules()}
+
+
+@app.get("/api/rules/{rule_id}")
+async def get_rule_endpoint(rule_id: str):
+    rule = get_rule(rule_id)
+    if not rule:
+        raise HTTPException(404, "Rule not found")
+    return rule
+
+
+@app.post("/api/rules")
+async def create_rule_endpoint(body: dict):
+    """Create a new alert rule."""
+    try:
+        return create_rule(body)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.put("/api/rules/{rule_id}")
+async def update_rule_endpoint(rule_id: str, body: dict):
+    """Update an alert rule."""
+    result = update_rule(rule_id, body)
+    if not result:
+        raise HTTPException(404, "Rule not found")
+    return result
+
+
+@app.delete("/api/rules/{rule_id}")
+async def delete_rule_endpoint(rule_id: str):
+    """Delete an alert rule."""
+    if not delete_rule(rule_id):
+        raise HTTPException(404, "Rule not found")
+    return {"deleted": True, "id": rule_id}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DATABASE MONITORING
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1273,6 +1416,388 @@ async def run_playbook(playbook_id: str, body: dict):
     node_ip    = body.get("node_ip", "")
     result     = await execute_playbook(pb, alert_data, node_ip)
     return result
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CUSTOM DASHBOARDS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/dashboards")
+async def api_list_dashboards():
+    return dash_mod.list_dashboards()
+
+@app.get("/api/dashboards/widget-types")
+async def api_widget_types():
+    return dash_mod.get_widget_types()
+
+@app.get("/api/dashboards/{dashboard_id}")
+async def api_get_dashboard(dashboard_id: str):
+    d = dash_mod.get_dashboard(dashboard_id)
+    if not d:
+        raise HTTPException(404, "Dashboard not found")
+    return d
+
+@app.post("/api/dashboards")
+async def api_create_dashboard(body: dict):
+    return dash_mod.create_dashboard(body, body.get("owner", "anonymous"))
+
+@app.put("/api/dashboards/{dashboard_id}")
+async def api_update_dashboard(dashboard_id: str, body: dict):
+    d = dash_mod.update_dashboard(dashboard_id, body)
+    if not d:
+        raise HTTPException(404, "Dashboard not found")
+    return d
+
+@app.delete("/api/dashboards/{dashboard_id}")
+async def api_delete_dashboard(dashboard_id: str):
+    if not dash_mod.delete_dashboard(dashboard_id):
+        raise HTTPException(400, "Cannot delete (not found or is default)")
+    return {"ok": True}
+
+@app.post("/api/dashboards/{dashboard_id}/duplicate")
+async def api_duplicate_dashboard(dashboard_id: str):
+    d = dash_mod.duplicate_dashboard(dashboard_id)
+    if not d:
+        raise HTTPException(404, "Dashboard not found")
+    return d
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ON-CALL SCHEDULING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/oncall/current")
+async def api_oncall_current(schedule_id: str | None = None):
+    return oncall_mod.get_current_oncall(schedule_id) or {}
+
+@app.get("/api/oncall/summary")
+async def api_oncall_summary():
+    return oncall_mod.get_oncall_summary()
+
+@app.get("/api/oncall/schedules")
+async def api_oncall_schedules():
+    return oncall_mod.list_schedules()
+
+@app.get("/api/oncall/schedules/{schedule_id}")
+async def api_oncall_schedule(schedule_id: str):
+    s = oncall_mod.get_schedule(schedule_id)
+    if not s:
+        raise HTTPException(404, "Schedule not found")
+    return s
+
+@app.post("/api/oncall/schedules")
+async def api_create_schedule(body: dict):
+    return oncall_mod.create_schedule(body)
+
+@app.put("/api/oncall/schedules/{schedule_id}")
+async def api_update_schedule(schedule_id: str, body: dict):
+    s = oncall_mod.update_schedule(schedule_id, body)
+    if not s:
+        raise HTTPException(404, "Schedule not found")
+    return s
+
+@app.delete("/api/oncall/schedules/{schedule_id}")
+async def api_delete_schedule(schedule_id: str):
+    if not oncall_mod.delete_schedule(schedule_id):
+        raise HTTPException(404, "Schedule not found")
+    return {"ok": True}
+
+@app.get("/api/oncall/overrides")
+async def api_oncall_overrides(schedule_id: str | None = None):
+    return oncall_mod.list_overrides(schedule_id)
+
+@app.post("/api/oncall/overrides")
+async def api_create_override(body: dict):
+    return oncall_mod.create_override(body)
+
+@app.delete("/api/oncall/overrides/{override_id}")
+async def api_delete_override(override_id: str):
+    if not oncall_mod.delete_override(override_id):
+        raise HTTPException(404, "Override not found")
+    return {"ok": True}
+
+@app.get("/api/oncall/policies")
+async def api_oncall_policies():
+    return oncall_mod.list_policies()
+
+@app.post("/api/oncall/policies")
+async def api_create_policy(body: dict):
+    return oncall_mod.create_policy(body)
+
+@app.put("/api/oncall/policies/{policy_id}")
+async def api_update_policy(policy_id: str, body: dict):
+    p = oncall_mod.update_policy(policy_id, body)
+    if not p:
+        raise HTTPException(404, "Policy not found")
+    return p
+
+@app.get("/api/oncall/events")
+async def api_oncall_events(limit: int = 50):
+    return oncall_mod.get_oncall_events(limit)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STATUS PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/status/services")
+async def api_status_services():
+    return sp_mod.list_services()
+
+@app.get("/api/status/services/{service_id}")
+async def api_status_service(service_id: str):
+    s = sp_mod.get_service(service_id)
+    if not s:
+        raise HTTPException(404, "Service not found")
+    return s
+
+@app.post("/api/status/services")
+async def api_create_service(body: dict):
+    return sp_mod.create_service(body)
+
+@app.put("/api/status/services/{service_id}")
+async def api_update_service(service_id: str, body: dict):
+    s = sp_mod.update_service(service_id, body)
+    if not s:
+        raise HTTPException(404, "Service not found")
+    return s
+
+@app.delete("/api/status/services/{service_id}")
+async def api_delete_service(service_id: str):
+    if not sp_mod.delete_service(service_id):
+        raise HTTPException(404, "Service not found")
+    return {"ok": True}
+
+@app.get("/api/status/incidents")
+async def api_status_incidents():
+    return sp_mod.list_status_incidents()
+
+@app.post("/api/status/incidents")
+async def api_create_status_incident(body: dict):
+    return sp_mod.create_status_incident(body)
+
+@app.put("/api/status/incidents/{incident_id}")
+async def api_update_status_incident(incident_id: str, body: dict):
+    i = sp_mod.update_status_incident(incident_id, body)
+    if not i:
+        raise HTTPException(404, "Incident not found")
+    return i
+
+@app.get("/api/status/public")
+async def api_public_status():
+    return sp_mod.get_public_status_data()
+
+@app.get("/api/status/overall")
+async def api_status_overall():
+    return sp_mod.get_overall_status()
+
+@app.get("/status", response_class=HTMLResponse)
+async def public_status_page():
+    """Public-facing status page — no auth required."""
+    data = sp_mod.get_public_status_data()
+    status_colors = {
+        "operational": "#34d399", "degraded": "#fbbf24",
+        "partial_outage": "#fb923c", "major_outage": "#f87171",
+        "maintenance": "#6366f1",
+    }
+    overall = data["overall"]
+    color = status_colors.get(overall["status"], "#34d399")
+
+    services_html = ""
+    for group_name, svcs in data["groups"].items():
+        services_html += f'<div class="sp-group"><div class="sp-group-name">{group_name}</div>'
+        for svc in svcs:
+            sc = status_colors.get(svc["status"], "#34d399")
+            label = svc["status"].replace("_", " ").title()
+            uptime = svc.get("uptime_90d", 100)
+            services_html += f'''<div class="sp-svc">
+              <div class="sp-svc-left"><span class="sp-dot" style="background:{sc};box-shadow:0 0 8px {sc}"></span>{svc["name"]}</div>
+              <div class="sp-svc-right"><span class="sp-uptime">{uptime}%</span><span class="sp-status" style="color:{sc}">{label}</span></div>
+            </div>'''
+        services_html += '</div>'
+
+    incidents_html = ""
+    for inc in data["incidents"][:5]:
+        inc_status = inc["status"].replace("_", " ").title()
+        incidents_html += f'<div class="sp-inc"><div class="sp-inc-title">{inc["title"]}<span class="sp-inc-badge">{inc_status}</span></div>'
+        for upd in inc.get("updates", [])[-3:]:
+            incidents_html += f'<div class="sp-inc-update"><span class="sp-inc-ts">{upd["ts"][:16]}</span> {upd["message"]}</div>'
+        incidents_html += '</div>'
+
+    return f'''<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PULSE Status</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#09090b;color:#fafafa;font-family:'Inter',system-ui,sans-serif;min-height:100vh}}
+.sp-wrap{{max-width:720px;margin:0 auto;padding:40px 20px}}
+.sp-header{{text-align:center;margin-bottom:40px}}
+.sp-logo{{font-size:24px;font-weight:900;letter-spacing:6px;margin-bottom:20px;background:linear-gradient(135deg,#fafafa,#a1a1aa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}}
+.sp-overall{{display:inline-flex;align-items:center;gap:12px;padding:14px 28px;border-radius:14px;font-size:16px;font-weight:700;border:1px solid rgba(255,255,255,0.06)}}
+.sp-overall-dot{{width:12px;height:12px;border-radius:50%}}
+.sp-group{{margin-bottom:24px}}
+.sp-group-name{{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#52525b;margin-bottom:10px;padding:0 4px}}
+.sp-svc{{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#111113;border:1px solid rgba(255,255,255,0.06);border-radius:10px;margin-bottom:6px;font-size:14px;font-weight:500}}
+.sp-svc-left{{display:flex;align-items:center;gap:12px}}
+.sp-dot{{width:10px;height:10px;border-radius:50%;flex-shrink:0}}
+.sp-svc-right{{display:flex;align-items:center;gap:16px}}
+.sp-uptime{{font-size:12px;color:#a1a1aa;font-weight:600}}
+.sp-status{{font-size:12px;font-weight:700;text-transform:capitalize}}
+.sp-section-title{{font-size:18px;font-weight:800;margin:40px 0 16px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.06)}}
+.sp-inc{{background:#111113;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:18px;margin-bottom:10px}}
+.sp-inc-title{{font-size:14px;font-weight:700;display:flex;align-items:center;gap:10px;margin-bottom:10px}}
+.sp-inc-badge{{font-size:10px;font-weight:700;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.05);color:#a1a1aa}}
+.sp-inc-update{{font-size:12px;color:#a1a1aa;padding:6px 0;border-top:1px solid rgba(255,255,255,0.04);line-height:1.5}}
+.sp-inc-ts{{color:#52525b;font-family:monospace;font-size:11px;margin-right:8px}}
+.sp-footer{{text-align:center;margin-top:48px;font-size:11px;color:#52525b}}
+.sp-footer a{{color:#6366f1;text-decoration:none}}
+</style></head><body>
+<div class="sp-wrap">
+  <div class="sp-header">
+    <div class="sp-logo">PULSE</div>
+    <div class="sp-overall" style="background:rgba({",".join(str(int(color[i:i+2],16)) for i in (1,3,5))},0.08)">
+      <div class="sp-overall-dot" style="background:{color};box-shadow:0 0 12px {color}"></div>
+      {overall["message"]}
+    </div>
+  </div>
+  {services_html}
+  <div class="sp-section-title">Recent Incidents</div>
+  {incidents_html if incidents_html else '<div style="color:#52525b;padding:20px;text-align:center">No recent incidents</div>'}
+  <div class="sp-footer">Powered by <a href="/">PULSE</a> &mdash; Updated {data["generated_at"][:16]} UTC</div>
+</div></body></html>'''
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NOTIFICATION CENTER
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/notifications")
+async def api_notifications(limit: int = 50, ntype: str | None = None, unread_only: bool = False):
+    return notif_mod.list_notifications(limit, ntype, unread_only)
+
+@app.get("/api/notifications/summary")
+async def api_notif_summary():
+    return notif_mod.get_summary()
+
+@app.put("/api/notifications/{notif_id}/read")
+async def api_notif_read(notif_id: str):
+    notif_mod.mark_read(notif_id)
+    return {"ok": True}
+
+@app.post("/api/notifications/read-all")
+async def api_notif_read_all():
+    count = notif_mod.mark_all_read()
+    return {"ok": True, "marked": count}
+
+@app.delete("/api/notifications/{notif_id}")
+async def api_notif_delete(notif_id: str):
+    notif_mod.delete_notification(notif_id)
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SERVICE CATALOG
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/catalog/services")
+async def api_catalog_services(tier: str | None = None, team: str | None = None, tag: str | None = None):
+    return catalog_mod.list_services(tier, team, tag)
+
+@app.get("/api/catalog/services/{service_id}")
+async def api_catalog_service(service_id: str):
+    s = catalog_mod.get_service(service_id)
+    if not s:
+        raise HTTPException(404, "Service not found")
+    return s
+
+@app.post("/api/catalog/services")
+async def api_catalog_create_service(body: dict):
+    return catalog_mod.create_service(body)
+
+@app.put("/api/catalog/services/{service_id}")
+async def api_catalog_update_service(service_id: str, body: dict):
+    s = catalog_mod.update_service(service_id, body)
+    if not s:
+        raise HTTPException(404, "Service not found")
+    return s
+
+@app.delete("/api/catalog/services/{service_id}")
+async def api_catalog_delete_service(service_id: str):
+    if not catalog_mod.delete_service(service_id):
+        raise HTTPException(404, "Service not found")
+    return {"ok": True}
+
+@app.get("/api/catalog/teams")
+async def api_catalog_teams():
+    return catalog_mod.list_teams()
+
+@app.get("/api/catalog/teams/{team_id}")
+async def api_catalog_team(team_id: str):
+    t = catalog_mod.get_team(team_id)
+    if not t:
+        raise HTTPException(404, "Team not found")
+    return t
+
+@app.post("/api/catalog/teams")
+async def api_catalog_create_team(body: dict):
+    return catalog_mod.create_team(body)
+
+@app.get("/api/catalog/graph")
+async def api_catalog_graph():
+    return catalog_mod.get_dependency_graph()
+
+@app.get("/api/catalog/summary")
+async def api_catalog_summary():
+    return catalog_mod.get_catalog_summary()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ALERTING WORKFLOWS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/workflows")
+async def api_workflows():
+    return wf_mod.list_workflows()
+
+@app.get("/api/workflows/components")
+async def api_workflow_components():
+    return wf_mod.get_components()
+
+@app.get("/api/workflows/{wf_id}")
+async def api_workflow(wf_id: str):
+    w = wf_mod.get_workflow(wf_id)
+    if not w:
+        raise HTTPException(404, "Workflow not found")
+    return w
+
+@app.post("/api/workflows")
+async def api_create_workflow(body: dict):
+    return wf_mod.create_workflow(body)
+
+@app.put("/api/workflows/{wf_id}")
+async def api_update_workflow(wf_id: str, body: dict):
+    w = wf_mod.update_workflow(wf_id, body)
+    if not w:
+        raise HTTPException(404, "Workflow not found")
+    return w
+
+@app.delete("/api/workflows/{wf_id}")
+async def api_delete_workflow(wf_id: str):
+    if not wf_mod.delete_workflow(wf_id):
+        raise HTTPException(404, "Workflow not found")
+    return {"ok": True}
+
+@app.post("/api/workflows/{wf_id}/toggle")
+async def api_toggle_workflow(wf_id: str):
+    w = wf_mod.toggle_workflow(wf_id)
+    if not w:
+        raise HTTPException(404, "Workflow not found")
+    return w
+
+@app.get("/api/workflows/{wf_id}/runs")
+async def api_workflow_runs(wf_id: str, limit: int = 20):
+    return wf_mod.get_workflow_runs(wf_id, limit)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

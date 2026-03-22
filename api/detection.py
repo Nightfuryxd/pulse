@@ -8,12 +8,75 @@ from pathlib import Path
 from typing import Any
 
 
-def load_rules() -> list[dict]:
+_rules_cache: list[dict] | None = None
+
+def _rules_path() -> Path:
     path = Path("config/rules.yaml")
     if not path.exists():
         path = Path("/app/config/rules.yaml")
-    with open(path) as f:
-        return yaml.safe_load(f).get("rules", [])
+    return path
+
+def load_rules() -> list[dict]:
+    global _rules_cache
+    if _rules_cache is not None:
+        return _rules_cache
+    with open(_rules_path()) as f:
+        _rules_cache = yaml.safe_load(f).get("rules", [])
+    return _rules_cache
+
+def _save_rules():
+    try:
+        with open(_rules_path(), 'w') as f:
+            yaml.dump({"rules": _rules_cache}, f, default_flow_style=False, sort_keys=False)
+    except (OSError, PermissionError):
+        pass  # ConfigMap is read-only in K8s — changes persist in memory until restart
+
+def get_all_rules() -> list[dict]:
+    return load_rules()
+
+def get_rule(rule_id: str) -> dict | None:
+    return next((r for r in load_rules() if r["id"] == rule_id), None)
+
+def create_rule(rule: dict) -> dict:
+    global _rules_cache
+    rules = load_rules()
+    if any(r["id"] == rule["id"] for r in rules):
+        raise ValueError(f"Rule '{rule['id']}' already exists")
+    required = ["id", "name", "condition", "severity"]
+    for f in required:
+        if f not in rule:
+            raise ValueError(f"Missing required field: {f}")
+    rule.setdefault("category", "general")
+    rule.setdefault("window_seconds", 0)
+    rule.setdefault("message", rule["name"])
+    rule.setdefault("enabled", True)
+    rules.append(rule)
+    _rules_cache = rules
+    _save_rules()
+    return rule
+
+def update_rule(rule_id: str, updates: dict) -> dict | None:
+    global _rules_cache
+    rules = load_rules()
+    rule = next((r for r in rules if r["id"] == rule_id), None)
+    if not rule:
+        return None
+    for k, v in updates.items():
+        if k != "id":
+            rule[k] = v
+    _rules_cache = rules
+    _save_rules()
+    return rule
+
+def delete_rule(rule_id: str) -> bool:
+    global _rules_cache
+    rules = load_rules()
+    new_rules = [r for r in rules if r["id"] != rule_id]
+    if len(new_rules) == len(rules):
+        return False
+    _rules_cache = new_rules
+    _save_rules()
+    return True
 
 
 # Simple in-memory window tracker: rule_id -> list of (ts, value)
@@ -57,6 +120,8 @@ def evaluate_metric(node_id: str, metric: dict) -> list[dict]:
     context = {"metric": metric}
 
     for rule in rules:
+        if not rule.get("enabled", True):
+            continue
         if "event." in rule["condition"]:
             continue  # event-only rule
 
@@ -97,6 +162,8 @@ def evaluate_event(node_id: str, event: dict) -> list[dict]:
     now    = datetime.utcnow()
 
     for rule in rules:
+        if not rule.get("enabled", True):
+            continue
         if "metric." in rule["condition"]:
             continue  # metric-only rule
 

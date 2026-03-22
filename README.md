@@ -1,153 +1,146 @@
 # PULSE — AI-Powered Infrastructure Intelligence Platform
 
-PULSE is an industry-grade, fully air-gappable monitoring, threat detection, and incident response platform. It works on any OS, any platform, and any IP-connected device — and uses AI to tell engineers exactly what broke, why, and what to fix.
+PULSE is an industry-grade monitoring, observability, and incident response platform. It combines real-time infrastructure monitoring, AI-powered root cause analysis, custom dashboards, on-call scheduling, and workflow automation — everything you need to run production infrastructure, at a fraction of the cost of Datadog + PagerDuty + Statuspage.
 
-> Think SolarWinds + PagerDuty + Datadog — but open-source, AI-native, and works with zero internet dependency.
+> 16,000+ lines of code. 40+ Python modules. 22 dashboard views. Deployed on Kubernetes.
 
 ---
 
 ## What It Does
 
-| Capability | Details |
+| Category | Capabilities |
 |---|---|
-| **Universal Monitoring** | Linux, Windows, macOS, Docker containers, VMs, bare metal |
-| **Network Equipment** | Routers, switches, firewalls, printers, UPS via SNMP v2c |
-| **Agentless SSH Collection** | Collect from remote Linux hosts without installing anything |
-| **Auto Network Discovery** | Ping sweep a CIDR range, auto-probe SNMP + SSH |
-| **AI Root Cause Analysis** | GPT-4o or local Ollama (air-gapped) — tells you why, not just what |
-| **Team Auto-Routing** | Routes incidents to SecOps, NetOps, AppDev, DBA, Infra automatically |
-| **War Room Bridging** | Notifies all SMEs across 11 platforms with full RCA context pre-loaded |
-| **11 Notification Channels** | Slack, Teams, Discord, Telegram, Google Chat, Zoom, PagerDuty, Opsgenie, Email, SMS, Webhooks |
-| **Multi-Step Escalation** | Auto-escalate if not acknowledged — L1 → L2 → L3 with configurable timers |
-| **Maintenance Windows** | Suppress alerts during planned work — YAML config or runtime API |
-| **Real-Time Dashboard** | Live WebSocket feed, multi-node charts, incident drill-down with RCA |
-| **Detection Rules** | YAML-defined rules — thresholds, windows, composite conditions |
+| **Monitoring** | Linux, Windows, macOS, Docker, VMs, SNMP devices (routers, switches, firewalls, UPS), SSH agentless, auto-discovery |
+| **Observability** | Real-time metrics, distributed tracing (OpenTelemetry), log aggregation, service topology, anomaly detection |
+| **Alerting** | YAML rules engine, threshold/window conditions, 13 notification channels, multi-step escalation |
+| **AI Intelligence** | GPT-4o / Ollama RCA, natural language queries, predictive alerting, anomaly detection |
+| **Incident Response** | Auto-correlation, AI root cause analysis, team routing, war room bridging, runbook automation |
+| **Custom Dashboards** | Drag-and-drop widget builder — stat cards, charts, gauges, alert feeds, node lists |
+| **On-Call Management** | Rotation schedules, escalation policies, overrides, page tracking (PagerDuty replacement) |
+| **Status Pages** | Public-facing status page, service health tracking, incident updates (Statuspage.io replacement) |
+| **Service Catalog** | Service definitions, ownership, dependencies, tiers, MTTR tracking |
+| **Workflow Automation** | Visual trigger → condition → action chains for automated incident response |
+| **SLO/SLA Tracking** | Error budget tracking, burn rate alerts, compliance reporting |
+| **Integrations** | Jira, ServiceNow, Slack, Teams, Discord, Telegram, PagerDuty, Opsgenie, webhooks |
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                        PULSE Platform                            │
-│                                                                  │
-│  ┌─────────────┐   ┌──────────────┐   ┌────────────────────┐    │
-│  │  Collector  │   │  Detection   │   │    AI RCA Engine   │    │
-│  │   Agent     │──▶│   Engine     │──▶│  GPT-4o / Ollama   │    │
-│  │  (Universal)│   │  (YAML Rules)│   │                    │    │
-│  └──────┬──────┘   └──────┬───────┘   └─────────┬──────────┘    │
-│         │                 │                     │               │
-│         ▼                 ▼                     ▼               │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                  FastAPI + PostgreSQL                    │    │
-│  │         /api/ingest/metrics  /api/ingest/events          │    │
-│  │         /api/alerts  /api/incidents  /ws/live             │    │
-│  └──────────────────────────┬──────────────────────────────┘    │
-│                             │                                    │
-│            ┌────────────────┼────────────────┐                  │
-│            ▼                ▼                ▼                  │
-│   ┌──────────────┐  ┌─────────────┐  ┌──────────────┐          │
-│   │  Team Router │  │  Slack Bot  │  │ Teams Webhook│          │
-│   │ (YAML-based) │  │  War Room   │  │  Adaptive    │          │
-│   └──────────────┘  └─────────────┘  └──────────────┘          │
-└──────────────────────────────────────────────────────────────────┘
-
-Monitored Sources:
-  [Linux Agent] [macOS Agent] [Windows Agent]
-  [SNMP: Router/Switch/Firewall/UPS] [SSH Agentless] [Auto-Discovered]
+PULSE Platform
+├── Agent (collector.py)          — Runs on every node, ships metrics + events
+├── API (FastAPI)                 — REST + WebSocket, 80+ endpoints
+│   ├── Detection Engine          — YAML rules, threshold evaluation
+│   ├── AI RCA Engine             — GPT-4o / Ollama root cause analysis
+│   ├── Correlation Engine        — Links alerts into incidents
+│   ├── Notification Engine       — 13 channels (Slack, Teams, email, SMS, etc.)
+│   ├── Escalation Engine         — Multi-step auto-escalation
+│   ├── Anomaly Detection         — Statistical baseline deviation
+│   ├── Predictive Engine         — Forecast metrics, predict alerts
+│   ├── NL Query Engine           — Natural language → metric queries
+│   ├── Workflow Engine           — Trigger → Condition → Action automation
+│   ├── On-Call Scheduler         — Rotations, overrides, escalation policies
+│   ├── Dashboard Builder         — Custom widget-based dashboards
+│   ├── Service Catalog           — Service ownership + dependency mapping
+│   ├── Status Page               — Public service health page
+│   ├── Auth (JWT)                — Signup, login, RBAC
+│   └── Integrations              — Jira, ServiceNow, OpenTelemetry
+├── Dashboard (index.html)        — 22-view SPA, Chart.js, Lucide icons
+├── Database (PostgreSQL)         — Metrics, events, alerts, incidents, logs
+├── Cache (Redis)                 — Real-time data, pub/sub
+└── Kubernetes (minikube)         — 2x API replicas, DaemonSet agent
 ```
 
 ---
 
 ## Quick Start
 
-**1. Clone and configure**
+**Docker Compose (simplest):**
 ```bash
-git clone https://github.com/YOUR_ORG/pulse.git
-cd pulse
-cp .env.example .env
-# Edit .env — minimum required: OPENAI_API_KEY (or OLLAMA_URL for air-gapped)
-```
-
-**2. Start the platform**
-```bash
+git clone https://github.com/YOUR_ORG/pulse.git && cd pulse
+cp .env.example .env    # Edit: OPENAI_API_KEY or OLLAMA_URL
 docker compose up -d
+# Dashboard: http://localhost:8000
 ```
 
-Dashboard: `http://localhost:8000`
+**Kubernetes (production):**
+```bash
+kubectl apply -f k8s/
+minikube service pulse-api -n pulse --url
+```
 
-**3. Install agent on a node** (one command)
+**Install agent on any node:**
 ```bash
 # Linux / macOS
-curl -sSL http://your-pulse-server:8000/install.sh | \
-  PULSE_API_URL=http://your-pulse-server:8000 sudo bash
+curl -sSL http://pulse-server:8000/install.sh | PULSE_API_URL=http://pulse-server:8000 sudo bash
 
-# Windows (PowerShell as Administrator)
-$env:PULSE_API_URL = "http://your-pulse-server:8000"
-irm http://your-pulse-server:8000/install.ps1 | iex
+# Windows (PowerShell as Admin)
+$env:PULSE_API_URL = "http://pulse-server:8000"; irm http://pulse-server:8000/install.ps1 | iex
 ```
 
-**4. Monitor network equipment (SNMP)**
-```bash
-# Edit .env:
-SNMP_TARGETS=192.168.1.1,192.168.1.254
-SNMP_COMMUNITY=public
-```
+---
 
-**5. Auto-discover everything on LAN**
-```bash
-# Edit .env:
-ENABLE_DISCOVERY=true
-NETWORK_RANGE=192.168.1.0/24
-```
+## Dashboard Views (22 total)
+
+| Section | Views |
+|---|---|
+| **Monitor** | Overview, Nodes, Metric History |
+| **Respond** | Alerts, Alert Rules, Incidents |
+| **Observe** | Event Feed, Service Topology, Log Stream, Synthetic Monitoring |
+| **Reliability** | SLO/SLA Tracking, Predictive Forecasts |
+| **Intelligence** | Ask PULSE (NL Query), Reports, Knowledge Base |
+| **Operate** | Custom Dashboards, Service Catalog, Workflows, On-Call, Status Page |
+| **Admin** | Settings (Profile, Thresholds, Notifications, Integrations, API Keys, Maintenance) |
+
+---
+
+## Feature Highlights
+
+### Custom Dashboard Builder
+Create unlimited dashboards with drag-and-drop widgets. Widget types: stat cards, line/area/bar charts, gauges, alert feeds, node lists, text/markdown, uptime bars. Save, duplicate, and share dashboards.
+
+### On-Call Management (PagerDuty Replacement)
+Define rotation schedules (daily/weekly), assign team members, manage escalation policies with multi-level rules. Override system for temporary schedule changes. Full page tracking and audit.
+
+### Alerting Workflow Builder
+Visual automation chains: **Trigger** (metric threshold, alert fired, security event, anomaly, SLO breach, schedule) → **Conditions** (time window, node filter, severity, business hours, cooldown) → **Actions** (notify, page on-call, create incident, run playbook, webhook, update status page, escalate).
+
+### Public Status Page (Statuspage.io Replacement)
+Define services, track operational status, publish incidents with update timelines. Public-facing page at `/status` — no auth required. 90-day uptime tracking per service.
+
+### Service Catalog
+Map every service in your organization: ownership (team), tier (0-3), dependencies, language/framework, repository, runbook links, SLO links, deploy frequency, MTTR, and incident count.
+
+### Notification Center
+In-app notification bell with unread count badge. Persistent feed of alerts, incidents, security events, deployments, and system notifications. Mark read/unread, filter by type.
 
 ---
 
 ## Stack
 
 ```
-FastAPI          — REST API + WebSocket real-time feed
-PostgreSQL       — Time-series metrics, events, alerts, incidents
-Redis            — Caching, pub/sub
-psutil           — Cross-platform system metrics (Linux/Windows/macOS)
-pysnmp           — SNMP v2c polling for network devices
-OpenAI / Ollama  — AI root cause analysis (cloud or air-gapped)
-Docker Compose   — One-command startup
-Chart.js         — Real-time metric charts in dashboard
+Python 3.11 / FastAPI      — API server (80+ endpoints)
+PostgreSQL 15              — Persistent storage
+Redis 7                    — Cache + real-time pub/sub
+psutil                     — Cross-platform system metrics
+Chart.js + Lucide          — Dashboard charting + icons
+OpenAI / Ollama            — AI root cause analysis
+Docker / Kubernetes        — Container orchestration
 ```
 
 ---
 
-## Project Structure
+## Build Phases
 
-```
-pulse/
-├── api/
-│   ├── main.py         # FastAPI — ingest, alerts, incidents, WebSocket
-│   ├── db.py           # SQLAlchemy models (Node, Metric, Event, Alert, Incident)
-│   ├── detection.py    # YAML rule engine — windowed threshold evaluation
-│   ├── rca.py          # AI root cause analysis (GPT-4o or Ollama)
-│   ├── router.py       # Team routing + multi-platform notification bridge
-│   ├── notifications.py # 11 notification providers (Slack, Teams, Discord, etc.)
-│   ├── escalation.py   # Multi-step escalation engine + maintenance windows
-│   ├── Dockerfile
-│   └── requirements.txt
-├── agent/
-│   ├── collector.py    # Universal collector — psutil + SNMP + SSH + discovery
-│   ├── Dockerfile
-│   └── requirements.txt
-├── config/
-│   ├── rules.yaml      # Detection rules (CPU, memory, auth brute force, port scan…)
-│   ├── teams.yaml      # Team definitions + notification channels per team
-│   ├── escalation.yaml # Multi-step escalation policies by severity
-│   └── maintenance.yaml # Maintenance window definitions
-├── dashboard/
-│   └── index.html      # Real-time dashboard (no build step, pure HTML/JS)
-├── install.sh          # Linux/macOS one-liner installer (systemd / launchd service)
-├── install.ps1         # Windows one-liner installer (Windows Service)
-├── docker-compose.yml
-└── .env.example
-```
+| Phase | Features | Modules |
+|---|---|---|
+| **Phase 1** | Agent, detection, AI RCA, correlation, 13 notification channels, escalation, auto-remediation, topology, knowledge base, SDK, MCP | 15 modules |
+| **Phase 2** | Synthetic monitoring, DB monitoring, anomaly detection, OpenTelemetry | 4 modules |
+| **Phase 3** | RBAC, SLO/SLA, predictive alerting, NL query, Jira, ServiceNow, reports | 7 modules |
+| **Phase 4** | JWT auth, login/signup, onboarding wizard, settings UI, alert rules CRUD, search, user profile | 1 module |
+| **Phase 5** | Custom dashboards, on-call scheduling, public status page | 3 modules |
+| **Phase 6** | Notification center, service catalog, alerting workflow builder | 3 modules |
 
 ---
 
@@ -158,180 +151,16 @@ pulse/
 | `OPENAI_API_KEY` | For cloud RCA | GPT-4o root cause analysis |
 | `OLLAMA_URL` | For air-gapped RCA | e.g. `http://ollama:11434` |
 | `POSTGRES_PASSWORD` | Yes | Database password |
+| `JWT_SECRET` | Optional | JWT signing key (auto-generated if not set) |
 | `SLACK_BOT_TOKEN` | Optional | Slack notifications |
-| `TEAMS_WEBHOOK_URL` | Optional | Microsoft Teams notifications |
-| `DISCORD_WEBHOOK_URL` | Optional | Discord notifications (per-team in teams.yaml) |
-| `TELEGRAM_BOT_TOKEN` | Optional | Telegram bot notifications |
-| `PAGERDUTY_API_KEY` | Optional | PagerDuty incident creation |
-| `OPSGENIE_API_KEY` | Optional | Opsgenie alert creation |
-| `SMTP_HOST` | Optional | Email alerts (also set SMTP_PORT, SMTP_USER, SMTP_PASS) |
-| `TWILIO_ACCOUNT_SID` | Optional | SMS alerts (also set TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) |
-| `SNMP_TARGETS` | Optional | Comma-separated IPs of network devices |
-| `SNMP_COMMUNITY` | Optional | SNMP v2c community string (default: `public`) |
-| `SSH_TARGETS` | Optional | `user@host` pairs for agentless collection |
-| `ENABLE_DISCOVERY` | Optional | `true` to enable LAN auto-discovery |
-| `NETWORK_RANGE` | Optional | CIDR to sweep e.g. `192.168.1.0/24` |
-| `TECH_STACK` | Optional | `django,postgres,nginx` — for stack-aware RCA advice |
-
----
-
-## Detection Rules
-
-Rules are defined in `config/rules.yaml`. Example:
-
-```yaml
-- id: cpu_critical
-  name: Critical CPU Usage
-  category: performance
-  severity: critical
-  condition: "cpu_percent >= 95"
-  for_seconds: 60       # must be true for 60s window
-  teams: [infra, appdev]
-
-- id: auth_brute_force
-  name: SSH Brute Force Attack
-  category: security
-  severity: critical
-  condition: "count >= 10 and type == 'auth_failure'"
-  window_seconds: 60
-  teams: [secops]
-```
-
----
-
-## Team Routing
-
-Teams are defined in `config/teams.yaml`:
-
-```yaml
-teams:
-  - id: secops
-    name: Security Operations
-    domains: [security, auth, network]
-    slack_channel: "#secops-incidents"
-    pagerduty_service: security-oncall
-
-  - id: netops
-    name: Network Operations
-    domains: [network, connectivity, snmp]
-    slack_channel: "#netops-incidents"
-```
-
----
-
-## AI Root Cause Analysis
-
-When a critical/high alert fires, PULSE automatically:
-
-1. Collects the last 20 metric readings + 20 security events for that node
-2. Sends them to GPT-4o (or Ollama) with full context: node info, tech stack, alert details
-3. Gets back structured JSON:
-   - `root_cause` — plain-English explanation
-   - `confidence` — 0.0–1.0
-   - `affected_components` — what's impacted
-   - `blast_radius` — how far the impact spreads
-   - `recommended_actions` — numbered steps to fix it
-   - `stack_specific_advice` — specific commands for your tech stack
-   - `owning_teams` — who should respond
-
-4. Routes to the right teams and creates a Slack/Teams war room with all this context pre-loaded
-
----
-
-## Air-Gapped Deployment
-
-PULSE works with zero internet access:
-
-```bash
-# 1. Run Ollama on any machine with a GPU
-docker run -d -p 11434:11434 ollama/ollama
-docker exec ollama ollama pull llama3.1:8b
-
-# 2. Point PULSE at it
-OLLAMA_URL=http://your-ollama-host:11434
-```
-
-The API, detection engine, team routing, and dashboard all work fully offline. Only the RCA engine needs a model — either GPT-4o (internet) or Ollama (local).
-
----
-
-## Agent Installer
-
-### Linux / macOS
-```bash
-# Basic install
-PULSE_API_URL=http://pulse:8000 sudo bash install.sh
-
-# With SNMP targets
-PULSE_API_URL=http://pulse:8000 \
-SNMP_TARGETS=192.168.1.1,10.0.0.254 \
-sudo bash install.sh
-
-# Uninstall
-sudo bash install.sh uninstall
-```
-
-### Windows (PowerShell as Administrator)
-```powershell
-$env:PULSE_API_URL = "http://pulse:8000"
-$env:SNMP_TARGETS  = "192.168.1.1"
-.\install.ps1
-
-# Uninstall
-.\install.ps1 -Uninstall
-```
-
-The installer:
-- Detects the OS and registers as a proper service (systemd / launchd / Windows Service)
-- Auto-installs Python if missing
-- Creates a virtualenv with all dependencies
-- Configures auto-restart on failure
-- Downloads `collector.py` directly from your PULSE server
-
----
-
-## Dashboard Views
-
-| View | What You See |
-|---|---|
-| **Overview** | Live CPU/memory/disk/network charts, active alerts, node health sidebar, recent incidents |
-| **Nodes** | Card grid of every monitored node (local agent, SNMP, SSH) with health status |
-| **Metrics** | Historical charts for any node — 1h / 6h / 24h range |
-| **Alerts** | Full alert table with severity filters, bulk resolve, per-alert resolve |
-| **Incidents** | Incident list with expandable RCA — root cause, blast radius, action steps, team tags, bridge status |
-| **Event Feed** | Security + system events — auth failures, port scans, OOM kills, segfaults |
-
----
-
-## What Gets Monitored
-
-**System metrics** (every 10s)
-- CPU %, memory %, disk %, network bytes in/out
-- Load average (1m, 5m, 15m)
-- Process count
-- Temperature sensors (Linux/macOS)
-
-**Security events** (every 10s)
-- SSH brute force (3+ failures in 60s → high, 10+ → critical)
-- Port scan detection (20+ unique ports from one IP)
-- Suspicious processes (crypto miners, reverse shells, known malware patterns)
-- Zombie processes
-- OOM kills
-- Kernel segfaults
-- Windows failed logon events (Event ID 4625)
-
-**SNMP devices** (every 10s per device)
-- CPU utilization
-- Memory utilization
-- Interface traffic (bytes in/out per interface)
-- Interface errors
-- System uptime
-- Device description / model
+| `TEAMS_WEBHOOK_URL` | Optional | Microsoft Teams |
+| `PAGERDUTY_API_KEY` | Optional | PagerDuty |
+| `SNMP_TARGETS` | Optional | Comma-separated IPs |
+| `SSH_TARGETS` | Optional | `user@host` pairs |
+| `ENABLE_DISCOVERY` | Optional | LAN auto-discovery |
 
 ---
 
 ## Status
 
-Production-ready core: metrics pipeline, detection engine, AI RCA, team routing, dashboard.
-
-Roadmap: SNMP v3, log management, OpenTelemetry ingest, APM/distributed tracing, anomaly detection (ML), Kubernetes pod monitoring, cloud integrations (AWS/Azure/GCP), mobile app.
+Production-ready. 6 phases complete. Deployed on Kubernetes with 2 API replicas and DaemonSet agent.
