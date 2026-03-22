@@ -1,15 +1,18 @@
 """
-Team Router + Collaboration Bridge.
+Team Router + Notification Bridge.
 
 Routes incidents to the right teams based on category/RCA output,
-then optionally bridges a call via Slack/Teams.
+then dispatches notifications to all configured providers per team.
+Supports: Slack, Teams, Discord, Telegram, Google Chat, Zoom,
+PagerDuty, Opsgenie, Email, SMS, Generic Webhooks.
 """
-import json
 import os
 from pathlib import Path
 from datetime import datetime
-import httpx
 import yaml
+
+from notifications import format_incident_payload, notify_all_teams
+from escalation import is_in_maintenance, register_escalation
 
 
 def load_teams() -> list[dict]:
@@ -49,113 +52,29 @@ def route_incident(categories: list[str], rca: dict) -> dict:
     return {"owners": owners, "observers": observers}
 
 
-async def create_slack_bridge(incident: dict, teams: dict, rca: dict) -> dict:
-    """
-    Create a Slack channel for the incident and post a context brief to all teams.
-    Returns bridge details dict.
-    """
-    token = os.getenv("SLACK_BOT_TOKEN", "")
-    if not token:
-        return {"status": "skipped", "reason": "SLACK_BOT_TOKEN not configured"}
-
-    channel_name = f"inc-{incident['id']}-{datetime.utcnow().strftime('%m%d-%H%M')}"
-    all_teams    = teams.get("owners", []) + teams.get("observers", [])
-    team_names   = ", ".join(t["name"] for t in all_teams)
-
-    # Format the context brief
-    rca_text = (
-        f"*Root Cause:* {rca.get('root_cause', 'Investigating...')}\n"
-        f"*Confidence:* {rca.get('confidence', 'low')}\n"
-        f"*Blast Radius:* {rca.get('blast_radius', 'Unknown')}\n\n"
-        f"*Immediate Actions:*\n" +
-        "\n".join(f"• {a}" for a in rca.get("recommended_actions", {}).get("immediate", [])) +
-        f"\n\n*Stack Advice:*\n{rca.get('stack_specific_advice', 'N/A')}"
-    )
-
-    context_block = {
-        "blocks": [
-            {"type": "header", "text": {"type": "plain_text", "text": f"[{incident['severity'].upper()}] {incident['title']}"}},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"*Node:* `{incident['node_id']}` | *Time:* {incident['ts']}\n*Teams paged:* {team_names}"}},
-            {"type": "divider"},
-            {"type": "section", "text": {"type": "mrkdwn", "text": rca_text}},
-            {"type": "divider"},
-            {"type": "section", "text": {"type": "mrkdwn", "text": f"_Full incident: PULSE dashboard — Incident #{incident['id']}_"}},
-        ]
-    }
-
-    results = {}
-    async with httpx.AsyncClient(timeout=10) as http:
-        # Notify each team's channel
-        for team in all_teams:
-            slack_channel = team.get("contact", {}).get("slack", "")
-            if not slack_channel:
-                continue
-            try:
-                resp = await http.post(
-                    "https://slack.com/api/chat.postMessage",
-                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-                    json={"channel": slack_channel, **context_block},
-                )
-                results[team["id"]] = resp.json().get("ok", False)
-            except Exception as e:
-                results[team["id"]] = f"error: {e}"
-
-    return {
-        "status":  "sent" if any(results.values()) else "failed",
-        "channel": channel_name,
-        "teams_notified": list(results.keys()),
-        "results": results,
-    }
-
-
-async def send_teams_bridge(incident: dict, teams_routing: dict, rca: dict) -> dict:
-    """Send Microsoft Teams adaptive card to all team channels."""
-    webhook = os.getenv("TEAMS_WEBHOOK_URL", "")
-    if not webhook:
-        return {"status": "skipped", "reason": "TEAMS_WEBHOOK_URL not configured"}
-
-    all_teams = teams_routing.get("owners", []) + teams_routing.get("observers", [])
-    payload   = {
-        "@type": "MessageCard",
-        "@context": "http://schema.org/extensions",
-        "themeColor": "FF0000" if incident["severity"] == "critical" else "FFA500",
-        "summary": f"[PULSE] {incident['title']}",
-        "sections": [{
-            "activityTitle": f"[{incident['severity'].upper()}] {incident['title']}",
-            "activitySubtitle": f"Node: {incident['node_id']} | Teams: {', '.join(t['name'] for t in all_teams)}",
-            "facts": [
-                {"name": "Root Cause", "value": rca.get("root_cause", "Investigating")},
-                {"name": "Confidence", "value": rca.get("confidence", "low")},
-                {"name": "Blast Radius", "value": rca.get("blast_radius", "Unknown")},
-                {"name": "Immediate Action", "value": (rca.get("recommended_actions", {}).get("immediate", ["Investigate"]))[0]},
-            ],
-        }],
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=10) as http:
-            resp = await http.post(webhook, json=payload)
-            return {"status": "sent" if resp.status_code == 200 else "failed", "code": resp.status_code}
-    except Exception as e:
-        return {"status": "error", "reason": str(e)}
-
-
 async def bridge_incident(incident: dict, teams_routing: dict, rca: dict) -> dict:
     """
-    Bridge all relevant teams for an incident.
-    Tries Slack first, Teams second, returns combined result.
+    Send notifications for an incident to all routed teams via all their
+    configured channels. Checks maintenance windows and registers escalation.
     """
-    results = {}
+    node_id = incident.get("node_id", "")
+    categories = [rca.get("category", "")]
 
-    slack_result = await create_slack_bridge(incident, teams_routing, rca)
-    results["slack"] = slack_result
+    # Check maintenance window — suppress if node is in maintenance
+    if is_in_maintenance(node_id, categories):
+        return {
+            "notified": False,
+            "reason": "maintenance_window",
+            "ts": datetime.utcnow().isoformat(),
+        }
 
-    teams_result = await send_teams_bridge(incident, teams_routing, rca)
-    results["teams"] = teams_result
+    # Format the universal payload
+    payload = format_incident_payload(incident, rca, teams_routing)
 
-    bridged = slack_result.get("status") == "sent" or teams_result.get("status") == "sent"
-    return {
-        "bridged":  bridged,
-        "channels": results,
-        "ts":       datetime.utcnow().isoformat(),
-    }
+    # Send to all teams via all their configured providers
+    result = await notify_all_teams(teams_routing, payload)
+
+    # Register for escalation tracking
+    register_escalation(incident.get("id", 0), incident, rca, teams_routing)
+
+    return result

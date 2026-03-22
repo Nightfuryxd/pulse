@@ -1,5 +1,18 @@
 # Team definitions — maps issue categories to on-call SMEs
-# PULSE uses this to auto-route incidents and bridge calls
+# PULSE uses this to auto-route incidents and bridge notifications
+#
+# Contact providers supported:
+#   slack         — Slack channel name (requires SLACK_BOT_TOKEN)
+#   teams         — Microsoft Teams incoming webhook URL
+#   discord       — Discord incoming webhook URL
+#   telegram      — Telegram chat ID (requires TELEGRAM_BOT_TOKEN)
+#   google_chat   — Google Chat webhook URL
+#   zoom          — Zoom Team Chat webhook URL
+#   pagerduty     — PagerDuty routing/integration key
+#   opsgenie      — (uses global OPSGENIE_API_KEY, routes by tags)
+#   email         — Email address (requires SMTP_* config)
+#   sms           — Phone number in E.164 format (requires TWILIO_* config)
+#   webhook       — Any HTTP endpoint that accepts JSON POST
 
 teams:
   - id: secops
@@ -8,7 +21,10 @@ teams:
     contact:
       slack: "#secops-alerts"
       email: secops@company.com
-      pagerduty_service: SECOPS01
+      pagerduty: ""          # PagerDuty routing key for SecOps service
+      discord: ""            # Discord webhook URL
+      telegram: ""           # Telegram chat ID
+      sms: ""                # On-call phone number
 
   - id: netops
     name: Network Operations
@@ -16,7 +32,8 @@ teams:
     contact:
       slack: "#netops-alerts"
       email: netops@company.com
-      pagerduty_service: NETOPS01
+      pagerduty: ""
+      teams: ""              # Teams webhook URL
 
   - id: appdev
     name: Application Development
@@ -24,7 +41,8 @@ teams:
     contact:
       slack: "#appdev-alerts"
       email: appdev@company.com
-      pagerduty_service: APPDEV01
+      discord: ""
+      google_chat: ""        # Google Chat webhook URL
 
   - id: dba
     name: Database Administration
@@ -32,7 +50,7 @@ teams:
     contact:
       slack: "#dba-alerts"
       email: dba@company.com
-      pagerduty_service: DBA01
+      pagerduty: ""
 
   - id: infra
     name: Infrastructure / SRE
@@ -40,4 +58,24 @@ teams:
     contact:
       slack: "#infra-alerts"
       email: infra@company.com
-      pagerduty_service: INFRA01
+      pagerduty: ""
+      sms: ""
+      telegram: "982892344"
+      whatsapp: ""             # phone number in E.164 format (via Twilio)
+      whatsapp_meta: ""        # phone number without + (via Meta Cloud API)
+
+  # Escalation-only teams (no domains — only reached via escalation policies)
+  - id: managers
+    name: Engineering Managers
+    domains: []
+    contact:
+      email: eng-managers@company.com
+      slack: "#eng-managers"
+      sms: ""
+
+  - id: vp_eng
+    name: VP Engineering
+    domains: []
+    contact:
+      email: vp-eng@company.com
+      sms: ""

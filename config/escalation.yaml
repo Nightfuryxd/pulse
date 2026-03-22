@@ -1,0 +1,32 @@
+# Escalation policies — auto-escalate if incident not acknowledged
+# Each tier fires after X minutes of no acknowledgment
+
+policies:
+  critical:
+    tiers:
+      - after_minutes: 5
+        notify: [infra, secops]
+        label: "L1 — On-call engineers"
+      - after_minutes: 15
+        notify: [managers]
+        label: "L2 — Engineering managers"
+      - after_minutes: 30
+        notify: [vp_eng]
+        label: "L3 — VP Engineering"
+
+  high:
+    tiers:
+      - after_minutes: 10
+        notify: [infra]
+        label: "L1 — On-call engineers"
+      - after_minutes: 30
+        notify: [managers]
+        label: "L2 — Engineering managers"
+
+  medium:
+    tiers:
+      - after_minutes: 30
+        notify: [infra]
+        label: "L1 — On-call engineers"
+
+  # low severity — no escalation, just initial notification

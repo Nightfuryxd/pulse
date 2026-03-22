@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "command": "file=\"$CLAUDE_FILE_PATH\"; if [[ \"$file\" == *.py ]] && [[ -n \"$file\" ]]; then python3 -c \"import ast; ast.parse(open('$file').read())\" 2>&1 && echo '✓ Syntax OK' || echo '✗ SYNTAX ERROR'; fi",
+        "description": "Syntax-check Python files after every edit"
+      }
+    ]
+  },
+  "mcpServers": {
+    "pulse": {
+      "command": "python3",
+      "args": ["/Users/aniketgupta/Desktop/Claude/pulse/mcp/pulse_mcp.py"],
+      "description": "PULSE monitoring platform — query nodes, alerts, incidents, notifications"
+    }
+  }
+}

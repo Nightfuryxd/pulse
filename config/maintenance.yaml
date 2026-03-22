@@ -1,0 +1,18 @@
+# Maintenance windows — suppress alerts during planned work
+# Can also be created/removed via API at runtime
+
+windows:
+  # Example:
+  # - id: db-upgrade-march
+  #   description: "PostgreSQL major version upgrade"
+  #   start: "2026-03-22T02:00:00"
+  #   end: "2026-03-22T06:00:00"
+  #   targets: [db-primary, db-replica-1, db-replica-2]
+  #   suppress_categories: [database, disk, cpu, memory]
+
+  # - id: network-maintenance
+  #   description: "Core switch firmware update"
+  #   start: "2026-03-23T01:00:00"
+  #   end: "2026-03-23T03:00:00"
+  #   targets: ["*"]  # suppress all nodes
+  #   suppress_categories: [network, connectivity, latency]

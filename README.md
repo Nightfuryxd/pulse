@@ -16,7 +16,10 @@ PULSE is an industry-grade, fully air-gappable monitoring, threat detection, and
 | **Auto Network Discovery** | Ping sweep a CIDR range, auto-probe SNMP + SSH |
 | **AI Root Cause Analysis** | GPT-4o or local Ollama (air-gapped) — tells you why, not just what |
 | **Team Auto-Routing** | Routes incidents to SecOps, NetOps, AppDev, DBA, Infra automatically |
-| **War Room Bridging** | Creates Slack/Teams channels, notifies all SMEs with full context pre-loaded |
+| **War Room Bridging** | Notifies all SMEs across 11 platforms with full RCA context pre-loaded |
+| **11 Notification Channels** | Slack, Teams, Discord, Telegram, Google Chat, Zoom, PagerDuty, Opsgenie, Email, SMS, Webhooks |
+| **Multi-Step Escalation** | Auto-escalate if not acknowledged — L1 → L2 → L3 with configurable timers |
+| **Maintenance Windows** | Suppress alerts during planned work — YAML config or runtime API |
 | **Real-Time Dashboard** | Live WebSocket feed, multi-node charts, incident drill-down with RCA |
 | **Detection Rules** | YAML-defined rules — thresholds, windows, composite conditions |
 
@@ -124,7 +127,9 @@ pulse/
 │   ├── db.py           # SQLAlchemy models (Node, Metric, Event, Alert, Incident)
 │   ├── detection.py    # YAML rule engine — windowed threshold evaluation
 │   ├── rca.py          # AI root cause analysis (GPT-4o or Ollama)
-│   ├── router.py       # Team routing + Slack/Teams war room bridging
+│   ├── router.py       # Team routing + multi-platform notification bridge
+│   ├── notifications.py # 11 notification providers (Slack, Teams, Discord, etc.)
+│   ├── escalation.py   # Multi-step escalation engine + maintenance windows
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── agent/
@@ -133,7 +138,9 @@ pulse/
 │   └── requirements.txt
 ├── config/
 │   ├── rules.yaml      # Detection rules (CPU, memory, auth brute force, port scan…)
-│   └── teams.yaml      # Team definitions (SecOps, NetOps, AppDev, DBA, Infra)
+│   ├── teams.yaml      # Team definitions + notification channels per team
+│   ├── escalation.yaml # Multi-step escalation policies by severity
+│   └── maintenance.yaml # Maintenance window definitions
 ├── dashboard/
 │   └── index.html      # Real-time dashboard (no build step, pure HTML/JS)
 ├── install.sh          # Linux/macOS one-liner installer (systemd / launchd service)
@@ -151,9 +158,14 @@ pulse/
 | `OPENAI_API_KEY` | For cloud RCA | GPT-4o root cause analysis |
 | `OLLAMA_URL` | For air-gapped RCA | e.g. `http://ollama:11434` |
 | `POSTGRES_PASSWORD` | Yes | Database password |
-| `SLACK_BOT_TOKEN` | Optional | War room Slack messages |
+| `SLACK_BOT_TOKEN` | Optional | Slack notifications |
 | `TEAMS_WEBHOOK_URL` | Optional | Microsoft Teams notifications |
-| `PAGERDUTY_API_KEY` | Optional | PagerDuty escalation |
+| `DISCORD_WEBHOOK_URL` | Optional | Discord notifications (per-team in teams.yaml) |
+| `TELEGRAM_BOT_TOKEN` | Optional | Telegram bot notifications |
+| `PAGERDUTY_API_KEY` | Optional | PagerDuty incident creation |
+| `OPSGENIE_API_KEY` | Optional | Opsgenie alert creation |
+| `SMTP_HOST` | Optional | Email alerts (also set SMTP_PORT, SMTP_USER, SMTP_PASS) |
+| `TWILIO_ACCOUNT_SID` | Optional | SMS alerts (also set TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER) |
 | `SNMP_TARGETS` | Optional | Comma-separated IPs of network devices |
 | `SNMP_COMMUNITY` | Optional | SNMP v2c community string (default: `public`) |
 | `SSH_TARGETS` | Optional | `user@host` pairs for agentless collection |
@@ -322,4 +334,4 @@ The installer:
 
 Production-ready core: metrics pipeline, detection engine, AI RCA, team routing, dashboard.
 
-Roadmap: SNMP v3, WMI Windows metrics, Kubernetes pod monitoring, custom webhook alerting, mobile push notifications.
+Roadmap: SNMP v3, log management, OpenTelemetry ingest, APM/distributed tracing, anomaly detection (ML), Kubernetes pod monitoring, cloud integrations (AWS/Azure/GCP), mobile app.

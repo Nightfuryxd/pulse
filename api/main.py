@@ -27,6 +27,7 @@ from db import init_db, get_db, Node, Metric, Event, Alert, Incident, Log, Servi
 from detection import evaluate_metric, evaluate_event
 from rca import analyse_incident
 from router import route_incident, bridge_incident
+from escalation import escalation_loop, acknowledge_incident, is_in_maintenance, add_maintenance_window, remove_maintenance_window, get_active_maintenance_windows
 from correlate import correlate, build_correlation_summary
 import topology as topo
 from remediate import run_playbooks_for_alert
@@ -76,7 +77,8 @@ _open_alerts_cache: list[dict]   = []   # for correlation
 async def startup():
     await init_db()
     load_from_config()
-    print("[PULSE] API v2.0 ready")
+    asyncio.create_task(escalation_loop())
+    print("[PULSE] API v2.0 ready — notification engine loaded")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -776,6 +778,100 @@ async def update_incident_status(incident_id: int, body: dict, db: AsyncSession 
         i.resolved_at = datetime.utcnow()
     await db.commit()
     return {"id": i.id, "status": i.status}
+
+
+@app.post("/api/incidents/{incident_id}/acknowledge")
+async def ack_incident(incident_id: int, db: AsyncSession = Depends(get_db)):
+    """Acknowledge an incident — stops escalation."""
+    i = (await db.execute(select(Incident).where(Incident.id == incident_id))).scalar_one_or_none()
+    if not i:
+        raise HTTPException(404, "Incident not found")
+    i.status = "acknowledged"
+    acknowledge_incident(incident_id)
+    await db.commit()
+    return {"id": i.id, "status": "acknowledged", "escalation_stopped": True}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAINTENANCE WINDOWS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/maintenance")
+async def list_maintenance_windows():
+    """List all active maintenance windows."""
+    return {"windows": get_active_maintenance_windows()}
+
+
+@app.post("/api/maintenance")
+async def create_maintenance_window(body: dict):
+    """Create a runtime maintenance window.
+    Body: {id, description, start, end, targets: [...], suppress_categories: [...]}
+    """
+    required = ["id", "start", "end"]
+    for field in required:
+        if field not in body:
+            raise HTTPException(400, f"Missing required field: {field}")
+    add_maintenance_window(body)
+    return {"status": "created", "window": body}
+
+
+@app.delete("/api/maintenance/{window_id}")
+async def delete_maintenance_window(window_id: str):
+    """Remove a runtime maintenance window."""
+    remove_maintenance_window(window_id)
+    return {"status": "removed", "id": window_id}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# NOTIFICATION PROVIDERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/notifications/providers")
+async def list_notification_providers():
+    """List all available notification providers and their config status."""
+    import os
+    providers = {
+        "slack":       {"configured": bool(os.getenv("SLACK_BOT_TOKEN"))},
+        "teams":       {"configured": bool(os.getenv("TEAMS_WEBHOOK_URL")), "note": "Per-team webhooks also supported in teams.yaml"},
+        "discord":     {"configured": True, "note": "Per-team webhook URLs in teams.yaml"},
+        "telegram":    {"configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))},
+        "google_chat": {"configured": True, "note": "Per-team webhook URLs in teams.yaml"},
+        "zoom":        {"configured": True, "note": "Per-team webhook URLs in teams.yaml"},
+        "pagerduty":   {"configured": bool(os.getenv("PAGERDUTY_API_KEY")), "note": "Per-team routing keys also supported"},
+        "opsgenie":    {"configured": bool(os.getenv("OPSGENIE_API_KEY"))},
+        "email":       {"configured": bool(os.getenv("SMTP_HOST"))},
+        "sms":         {"configured": bool(os.getenv("TWILIO_ACCOUNT_SID"))},
+        "webhook":     {"configured": True, "note": "Per-team webhook URLs in teams.yaml"},
+        "whatsapp":    {"configured": bool(os.getenv("TWILIO_ACCOUNT_SID")), "note": "Via Twilio — uses same TWILIO_* creds as SMS"},
+        "whatsapp_meta": {"configured": bool(os.getenv("WHATSAPP_TOKEN")), "note": "Via Meta Cloud API — needs WHATSAPP_TOKEN + WHATSAPP_PHONE_ID"},
+    }
+    return {"providers": providers}
+
+
+@app.post("/api/notifications/test")
+async def test_notification(body: dict):
+    """Send a test notification. Body: {provider, target, message?}"""
+    from notifications import PROVIDER_MAP, format_incident_payload
+    provider = body.get("provider")
+    target = body.get("target")
+    if not provider or provider not in PROVIDER_MAP:
+        raise HTTPException(400, f"Unknown provider. Available: {list(PROVIDER_MAP.keys())}")
+    if not target and provider not in ("opsgenie",):
+        raise HTTPException(400, "Missing 'target' (channel, webhook URL, email, phone, etc.)")
+
+    test_payload = format_incident_payload(
+        {"id": 0, "node_id": "test-node", "title": "PULSE Test Notification",
+         "severity": "low", "ts": datetime.utcnow().isoformat()},
+        {"root_cause": "This is a test notification from PULSE.",
+         "confidence": 1.0, "blast_radius": "None",
+         "recommended_actions": {"immediate": ["No action needed — this is a test."]},
+         "stack_specific_advice": "N/A"},
+        {"owners": [{"name": "Test Team"}], "observers": []},
+    )
+    test_payload["title"] = body.get("message", "PULSE Test Notification")
+
+    result = await PROVIDER_MAP[provider](target, test_payload)
+    return result
 
 
 @app.post("/api/incidents/{incident_id}/bridge")
