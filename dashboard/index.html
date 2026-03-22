@@ -555,6 +555,9 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
       <i data-lucide="zap"></i><span class="sb-item-label">Incidents</span>
       <span class="sb-badge warn" id="sbIncidentBadge" style="display:none">0</span>
     </div>
+    <div class="sb-item" onclick="showView('log-alerts')">
+      <i data-lucide="scroll-text"></i><span class="sb-item-label">Log Alerts</span>
+    </div>
 
     <div class="sb-section">Observe</div>
     <div class="sb-item" onclick="showView('events')">
@@ -569,6 +572,9 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
     <div class="sb-item" onclick="showView('synthetic')">
       <i data-lucide="globe"></i><span class="sb-item-label">Synthetic</span>
       <span class="sb-badge ok" id="sbSyntheticBadge" style="display:none">0</span>
+    </div>
+    <div class="sb-item" onclick="showView('apm')">
+      <i data-lucide="git-branch"></i><span class="sb-item-label">APM / Traces</span>
     </div>
 
     <div class="sb-section">Reliability</div>
@@ -610,6 +616,12 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
     </div>
 
     <div class="sb-section">Admin</div>
+    <div class="sb-item" onclick="showView('audit')">
+      <i data-lucide="clipboard-list"></i><span class="sb-item-label">Audit Log</span>
+    </div>
+    <div class="sb-item" onclick="showView('environments')">
+      <i data-lucide="layers"></i><span class="sb-item-label">Environments</span>
+    </div>
     <div class="sb-item" onclick="showView('settings')">
       <i data-lucide="settings"></i><span class="sb-item-label">Settings</span>
     </div>
@@ -643,7 +655,23 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
         <kbd>⌘K</kbd>
         <div class="search-results" id="searchResults"></div>
       </div>
-      <button class="refresh-btn" onclick="loadAll()"><i data-lucide="refresh-cw"></i> Refresh</button>
+      <!-- Environment Switcher -->
+      <div style="position:relative" id="envSwitcherWrap">
+        <button class="refresh-btn" onclick="toggleEnvDropdown()" id="envSwitcherBtn" style="gap:6px">
+          <span id="envDot" style="width:8px;height:8px;border-radius:50%;background:#f87171"></span>
+          <span id="envLabel" style="font-size:11px">Production</span>
+          <i data-lucide="chevron-down" style="width:12px;height:12px"></i>
+        </button>
+        <div id="envDropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;width:220px;background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:var(--shadow-xl);z-index:200;overflow:hidden"></div>
+      </div>
+      <!-- Auto-refresh -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="refresh-btn" onclick="loadAll()" title="Refresh now"><i data-lucide="refresh-cw"></i></button>
+        <button class="refresh-btn" onclick="toggleAutoRefresh()" id="autoRefreshBtn" title="Auto-refresh" style="font-size:11px;gap:4px">
+          <i data-lucide="timer" style="width:14px;height:14px"></i>
+          <span id="autoRefreshLabel">Off</span>
+        </button>
+      </div>
       <!-- Notification Bell -->
       <div style="position:relative;cursor:pointer" onclick="toggleNotifPanel()">
         <i data-lucide="bell" style="width:20px;height:20px;color:var(--text2)"></i>
@@ -1302,6 +1330,136 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
       </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         LOG ALERTS VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-log-alerts">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Log-Based Alerts</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Alert on log patterns — keyword, regex, rate-based, and absence detection</div>
+        </div>
+        <button class="btn btn-primary" onclick="showCreateLogRuleModal()"><i data-lucide="plus" style="width:14px;height:14px;margin-right:4px"></i> New Rule</button>
+      </div>
+      <!-- Summary -->
+      <div class="grid2 col-5" id="logAlertSummary"></div>
+      <!-- Rules list -->
+      <div id="logAlertRulesList" style="margin-top:18px"><div class="loading">Loading log alert rules</div></div>
+      <!-- Recent alerts -->
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="bell-ring"></i> Recent Log Alerts</div></div>
+        <div class="pb-scroll" id="logAlertsFired" style="max-height:300px"><div class="empty">No alerts fired yet</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         APM / DISTRIBUTED TRACING VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-apm">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">APM / Distributed Tracing</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Trace requests across services — waterfall view, latency, errors</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="apmServiceFilter" onchange="loadApmView()" style="font-size:12px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)">
+            <option value="">All Services</option>
+          </select>
+          <select id="apmStatusFilter" onchange="loadApmView()" style="font-size:12px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)">
+            <option value="">All Status</option>
+            <option value="ok">OK</option>
+            <option value="error">Error</option>
+          </select>
+        </div>
+      </div>
+      <!-- Summary cards -->
+      <div class="grid2 col-5" id="apmSummary"></div>
+      <!-- Service performance table -->
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="table"></i> Service Performance</div></div>
+        <div id="apmServiceTable" style="padding:0"><div class="loading">Loading</div></div>
+      </div>
+      <!-- Trace list -->
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="list"></i> Recent Traces</div></div>
+        <div class="pb-scroll" id="apmTraceList" style="max-height:500px"><div class="loading">Loading traces</div></div>
+      </div>
+      <!-- Trace detail / waterfall -->
+      <div id="apmTraceDetail" style="display:none;margin-top:18px">
+        <div class="panel">
+          <div class="ph">
+            <div class="ph-title"><i data-lucide="git-branch"></i> Trace Waterfall</div>
+            <button class="filter-btn" onclick="document.getElementById('apmTraceDetail').style.display='none'">Close</button>
+          </div>
+          <div id="apmWaterfall" style="padding:18px;overflow-x:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         AUDIT LOG VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-audit">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Audit Log</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Compliance-grade tracking of all platform actions</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="auditCategoryFilter" onchange="loadAuditView()" style="font-size:12px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)">
+            <option value="">All Categories</option>
+            <option value="auth">Auth</option>
+            <option value="config">Config</option>
+            <option value="alert">Alert</option>
+            <option value="incident">Incident</option>
+            <option value="oncall">On-Call</option>
+            <option value="workflow">Workflow</option>
+            <option value="dashboard">Dashboard</option>
+            <option value="status_page">Status Page</option>
+            <option value="catalog">Catalog</option>
+            <option value="api_key">API Key</option>
+            <option value="user">User</option>
+            <option value="environment">Environment</option>
+          </select>
+          <select id="auditActionFilter" onchange="loadAuditView()" style="font-size:12px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)">
+            <option value="">All Actions</option>
+            <option value="create">Create</option>
+            <option value="update">Update</option>
+            <option value="delete">Delete</option>
+            <option value="login">Login</option>
+            <option value="acknowledge">Acknowledge</option>
+            <option value="resolve">Resolve</option>
+            <option value="escalate">Escalate</option>
+            <option value="toggle">Toggle</option>
+          </select>
+        </div>
+      </div>
+      <!-- Summary -->
+      <div class="grid2 col-4" id="auditSummary"></div>
+      <!-- Entries -->
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="clipboard-list"></i> Audit Trail</div></div>
+        <div id="auditEntries" style="padding:0"><div class="loading">Loading audit log</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         ENVIRONMENTS VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-environments">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Environments</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Manage production, staging, and development environments</div>
+        </div>
+        <button class="btn btn-primary" onclick="showCreateEnvModal()"><i data-lucide="plus" style="width:14px;height:14px;margin-right:4px"></i> New Environment</button>
+      </div>
+      <!-- Summary -->
+      <div class="grid2 col-4" id="envSummary"></div>
+      <!-- Environment cards -->
+      <div class="grid2 col-2" id="envGrid" style="margin-top:18px"><div class="loading">Loading environments</div></div>
+    </div>
+
   </div><!-- #content -->
 </div><!-- #main -->
 
@@ -1568,7 +1726,8 @@ const viewTitles = {
   synthetic:'Synthetic Monitoring', slos:'SLO / SLA Tracking',
   predictions:'Predictive Forecasts', ask:'Ask PULSE', reports:'Reports',
   settings:'Settings', 'custom-dash':'Custom Dashboards', oncall:'On-Call',
-  statuspage:'Status Page', catalog:'Service Catalog', workflows:'Workflows'
+  statuspage:'Status Page', catalog:'Service Catalog', workflows:'Workflows',
+  'log-alerts':'Log Alerts', apm:'APM / Traces', audit:'Audit Log', environments:'Environments'
 };
 
 function showView(name) {
@@ -1597,6 +1756,10 @@ function showView(name) {
   if (name === 'statuspage')  loadStatusPageView();
   if (name === 'catalog')     loadCatalogView();
   if (name === 'workflows')   loadWorkflowsView();
+  if (name === 'log-alerts')  loadLogAlertsView();
+  if (name === 'apm')         loadApmView();
+  if (name === 'audit')       loadAuditView();
+  if (name === 'environments') loadEnvironmentsView();
   if (name === 'settings')    loadSettingsView();
 }
 
@@ -3896,6 +4059,504 @@ function signOut() {
   document.cookie = 'pulse_token=;path=/;max-age=0';
   window.location.href = '/login';
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUTO-REFRESH
+// ══════════════════════════════════════════════════════════════════════════════
+let _autoRefreshInterval = null;
+const AUTO_REFRESH_OPTIONS = [0, 10, 30, 60]; // seconds
+let _autoRefreshIdx = 0;
+
+function toggleAutoRefresh() {
+  _autoRefreshIdx = (_autoRefreshIdx + 1) % AUTO_REFRESH_OPTIONS.length;
+  const secs = AUTO_REFRESH_OPTIONS[_autoRefreshIdx];
+  const btn = document.getElementById('autoRefreshBtn');
+  const label = document.getElementById('autoRefreshLabel');
+
+  if (_autoRefreshInterval) { clearInterval(_autoRefreshInterval); _autoRefreshInterval = null; }
+
+  if (secs > 0) {
+    label.textContent = secs + 's';
+    btn.style.color = 'var(--accent2)';
+    _autoRefreshInterval = setInterval(loadAll, secs * 1000);
+  } else {
+    label.textContent = 'Off';
+    btn.style.color = '';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENVIRONMENT SWITCHER
+// ══════════════════════════════════════════════════════════════════════════════
+let _currentEnv = 'env-production';
+let _envDropOpen = false;
+
+async function loadEnvSwitcher() {
+  try {
+    const envs = await fetch(`${API}/api/environments`).then(r => r.json());
+    const current = envs.find(e => e.id === _currentEnv) || envs[0];
+    if (current) {
+      document.getElementById('envDot').style.background = current.color;
+      document.getElementById('envLabel').textContent = current.name;
+    }
+    const dd = document.getElementById('envDropdown');
+    dd.innerHTML = envs.map(e => `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s;${e.id===_currentEnv?'background:var(--glass2);':''}border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--glass2)'" onmouseout="this.style.background='${e.id===_currentEnv?'var(--glass2)':''}'" onclick="switchEnv('${e.id}','${e.name}','${e.color}')">
+        <div style="width:10px;height:10px;border-radius:50%;background:${e.color};box-shadow:0 0 6px ${e.color}50"></div>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:${e.id===_currentEnv?'700':'500'}">${e.name}</div>
+          <div style="font-size:10px;color:var(--text3)">${e.region||''} ${e.node_count||0} nodes</div>
+        </div>
+        ${e.is_default?'<span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">default</span>':''}
+        ${e.id===_currentEnv?'<i data-lucide="check" style="width:14px;height:14px;color:var(--green)"></i>':''}
+      </div>
+    `).join('');
+    if (window.lucide) lucide.createIcons();
+  } catch(e) {}
+}
+
+function toggleEnvDropdown() {
+  _envDropOpen = !_envDropOpen;
+  document.getElementById('envDropdown').style.display = _envDropOpen ? 'block' : 'none';
+}
+
+function switchEnv(id, name, color) {
+  _currentEnv = id;
+  document.getElementById('envDot').style.background = color;
+  document.getElementById('envLabel').textContent = name;
+  document.getElementById('envDropdown').style.display = 'none';
+  _envDropOpen = false;
+  loadAll();
+}
+
+// Close env dropdown on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('#envSwitcherWrap') && _envDropOpen) {
+    document.getElementById('envDropdown').style.display = 'none';
+    _envDropOpen = false;
+  }
+});
+
+// Load on startup
+setTimeout(loadEnvSwitcher, 500);
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LOG-BASED ALERTS VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+
+const logRuleTypeIcons = {keyword:'type',regex:'regex',rate:'bar-chart-3',absence:'eye-off'};
+const logRuleTypeColors = {keyword:'var(--accent2)',regex:'var(--purple)',rate:'var(--yellow)',absence:'var(--orange)'};
+const logSevColors = {info:'var(--text3)',low:'var(--green)',medium:'var(--cyan)',high:'var(--yellow)',critical:'var(--red)'};
+
+async function loadLogAlertsView() {
+  const [rules, summary, alerts] = await Promise.all([
+    fetch(`${API}/api/log-alerts/rules`).then(r => r.json()),
+    fetch(`${API}/api/log-alerts/summary`).then(r => r.json()),
+    fetch(`${API}/api/log-alerts/alerts?limit=20`).then(r => r.json()),
+  ]);
+
+  // Summary cards
+  document.getElementById('logAlertSummary').innerHTML = [
+    {label:'Total Rules', val:summary.total_rules, color:'var(--accent2)'},
+    {label:'Enabled', val:summary.enabled, color:'var(--green)'},
+    {label:'Disabled', val:summary.disabled, color:'var(--text3)'},
+    {label:'Alerts Fired', val:summary.total_alerts_fired, color:'var(--yellow)'},
+    {label:'Top Trigger', val:summary.top_triggered?.[0]?.name||'None', color:'var(--red)', small:true},
+  ].map(s => `
+    <div class="panel" style="padding:16px 18px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+      <div style="font-size:${s.small?'14':'28'}px;font-weight:${s.small?'600':'900'};color:${s.color};margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.val}</div>
+    </div>
+  `).join('');
+
+  // Rules list
+  const el = document.getElementById('logAlertRulesList');
+  el.innerHTML = rules.map(r => {
+    const tc = logRuleTypeColors[r.type] || 'var(--accent2)';
+    const sc = logSevColors[r.severity] || 'var(--text3)';
+    return `<div class="panel" style="margin-bottom:12px">
+      <div style="padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:32px;height:32px;border-radius:var(--radius-sm);background:${tc}15;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="${logRuleTypeIcons[r.type]||'scroll-text'}" style="width:16px;height:16px;color:${tc}"></i>
+              </div>
+              <div>
+                <div style="font-size:15px;font-weight:700">${r.name}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${r.description||''}</div>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="badge ${r.enabled?'open':'resolved'}">${r.enabled?'Active':'Disabled'}</span>
+            <span class="badge" style="background:${sc}15;color:${sc};border:1px solid ${sc}30">${r.severity}</span>
+            <button class="btn btn-secondary" style="font-size:11px;padding:5px 10px" onclick="toggleLogRule('${r.id}')">${r.enabled?'Disable':'Enable'}</button>
+            <button class="btn btn-danger" style="font-size:11px;padding:5px 10px" onclick="deleteLogRule('${r.id}')">Delete</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;margin-top:14px;font-size:11px;color:var(--text3);flex-wrap:wrap">
+          <span><strong>Type:</strong> ${r.type}</span>
+          <span><strong>Pattern:</strong> <code style="background:var(--glass);padding:2px 6px;border-radius:4px;font-size:10px">${(r.pattern||'').length > 60 ? r.pattern.slice(0,60)+'...' : r.pattern}</code></span>
+          <span><strong>Threshold:</strong> ${r.threshold} / ${r.window_minutes}min</span>
+          <span><strong>Triggered:</strong> ${r.trigger_count||0}x</span>
+          ${r.last_triggered ? '<span>Last: '+timeAgo(r.last_triggered)+'</span>' : ''}
+        </div>
+        ${(r.tags||[]).length ? `<div style="display:flex;gap:4px;margin-top:8px">${r.tags.map(t => `<span class="kb-tag">${t}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No log alert rules configured</div>';
+
+  // Recent alerts
+  const alertEl = document.getElementById('logAlertsFired');
+  alertEl.innerHTML = alerts.length ? alerts.map(a => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border)">
+      <div style="width:8px;height:8px;border-radius:50%;background:${logSevColors[a.severity]||'var(--yellow)'};box-shadow:0 0 6px ${logSevColors[a.severity]||'var(--yellow)'}50"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${a.rule_name}</div>
+        <div style="font-size:10px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.sample_log||''}</div>
+      </div>
+      <span class="badge" style="background:${logSevColors[a.severity]||'var(--text3)'}15;color:${logSevColors[a.severity]||'var(--text3)'};font-size:9px">${a.severity}</span>
+      <span style="font-size:10px;color:var(--text3)">${timeAgo(a.triggered_at)}</span>
+    </div>
+  `).join('') : '<div class="empty">No log alerts fired</div>';
+
+  if (window.lucide) lucide.createIcons();
+}
+
+async function toggleLogRule(id) {
+  await fetch(`${API}/api/log-alerts/rules/${id}/toggle`, {method:'POST'});
+  loadLogAlertsView();
+}
+
+async function deleteLogRule(id) {
+  if (!confirm('Delete this log alert rule?')) return;
+  await fetch(`${API}/api/log-alerts/rules/${id}`, {method:'DELETE'});
+  loadLogAlertsView();
+}
+
+function showCreateLogRuleModal() {
+  const name = prompt('Rule name:', 'New Log Rule');
+  if (!name) return;
+  const type = prompt('Type (keyword, regex, rate, absence):', 'keyword');
+  const pattern = prompt('Pattern (keyword or regex):', 'ERROR|error');
+  const severity = prompt('Severity (info, low, medium, high, critical):', 'high');
+  const threshold = parseInt(prompt('Threshold (count):', '1')) || 1;
+  const window_minutes = parseInt(prompt('Window (minutes):', '5')) || 5;
+  fetch(`${API}/api/log-alerts/rules`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, type:type||'keyword', pattern:pattern||'', severity:severity||'high', threshold, window_minutes, tags:[]})
+  }).then(() => loadLogAlertsView());
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// APM / DISTRIBUTED TRACING VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function loadApmView() {
+  const service = document.getElementById('apmServiceFilter')?.value || '';
+  const status = document.getElementById('apmStatusFilter')?.value || '';
+
+  const [summary, traces, services] = await Promise.all([
+    fetch(`${API}/api/apm/summary`).then(r => r.json()),
+    fetch(`${API}/api/apm/traces?limit=30${service?'&service='+service:''}${status?'&status='+status:''}`).then(r => r.json()),
+    fetch(`${API}/api/apm/services`).then(r => r.json()),
+  ]);
+
+  // Populate service filter
+  const sel = document.getElementById('apmServiceFilter');
+  const curVal = sel.value;
+  if (sel.options.length <= 1) {
+    services.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o); });
+    sel.value = curVal;
+  }
+
+  // Summary cards
+  document.getElementById('apmSummary').innerHTML = [
+    {label:'Total Traces', val:summary.total_traces, color:'var(--accent2)'},
+    {label:'Error Rate', val:summary.error_rate+'%', color:summary.error_rate>10?'var(--red)':'var(--green)'},
+    {label:'Avg Latency', val:summary.avg_duration_ms+'ms', color:'var(--cyan)'},
+    {label:'P95 Latency', val:summary.p95_duration_ms+'ms', color:'var(--yellow)'},
+    {label:'P99 Latency', val:summary.p99_duration_ms+'ms', color:'var(--orange,var(--yellow))'},
+  ].map(s => `
+    <div class="panel" style="padding:16px 18px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+      <div style="font-size:28px;font-weight:900;color:${s.color};margin-top:6px">${s.val}</div>
+    </div>
+  `).join('');
+
+  // Service performance table
+  const serviceStats = summary.service_stats || {};
+  const svcTableEl = document.getElementById('apmServiceTable');
+  const svcEntries = Object.entries(serviceStats).sort((a,b) => b[1].requests - a[1].requests);
+  svcTableEl.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:2px solid var(--border);text-align:left">
+        <th style="padding:10px 18px;font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:1px">Service</th>
+        <th style="padding:10px 14px;font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:1px;text-align:right">Requests</th>
+        <th style="padding:10px 14px;font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:1px;text-align:right">Error Rate</th>
+        <th style="padding:10px 14px;font-weight:700;color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:1px;text-align:right">Avg Latency</th>
+      </tr></thead>
+      <tbody>${svcEntries.map(([svc, s]) => `
+        <tr style="border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--glass)'" onmouseout="this.style.background=''">
+          <td style="padding:10px 18px;font-weight:600">${svc}</td>
+          <td style="padding:10px 14px;text-align:right">${s.requests}</td>
+          <td style="padding:10px 14px;text-align:right;color:${s.error_rate>5?'var(--red)':'var(--green)'}">${s.error_rate}%</td>
+          <td style="padding:10px 14px;text-align:right;color:${s.avg_duration_ms>100?'var(--yellow)':'var(--text2)'}">${s.avg_duration_ms}ms</td>
+        </tr>
+      `).join('')}</tbody>
+    </table>`;
+
+  // Trace list
+  const traceEl = document.getElementById('apmTraceList');
+  traceEl.innerHTML = traces.map(t => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='var(--glass2)'" onmouseout="this.style.background=''" onclick="showTraceDetail('${t.trace_id}')">
+      <div style="width:8px;height:8px;border-radius:50%;background:${t.has_error?'var(--red)':'var(--green)'};box-shadow:0 0 6px ${t.has_error?'rgba(248,113,113,0.4)':'rgba(52,211,153,0.4)'}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-weight:700">${t.root_operation||t.root_service}</span>
+          <span style="font-size:10px;color:var(--text3)">${t.root_service}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:monospace">${t.trace_id.slice(0,16)}...</div>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;font-size:11px;color:var(--text3)">
+        <span>${t.span_count} spans</span>
+        <span>${t.service_count} services</span>
+        <span style="font-weight:700;color:${t.duration_ms>200?'var(--yellow)':'var(--text2)'}">${t.duration_ms}ms</span>
+        <span>${timeAgo(t.start_time)}</span>
+      </div>
+    </div>
+  `).join('') || '<div class="empty">No traces found</div>';
+  if (window.lucide) lucide.createIcons();
+}
+
+async function showTraceDetail(traceId) {
+  const trace = await fetch(`${API}/api/apm/traces/${traceId}`).then(r => r.json());
+  const detail = document.getElementById('apmTraceDetail');
+  detail.style.display = 'block';
+
+  const spans = trace.spans || [];
+  const traceStart = new Date(trace.start_time).getTime();
+  const totalDuration = trace.duration_ms || 1;
+
+  // Build waterfall
+  const wf = document.getElementById('apmWaterfall');
+  const svcColors = {};
+  const palette = ['#6366f1','#f87171','#fbbf24','#34d399','#22d3ee','#a78bfa','#fb923c','#ec4899'];
+  let ci = 0;
+
+  // Sort spans by start time
+  spans.sort((a,b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+  wf.innerHTML = `
+    <div style="font-size:12px;margin-bottom:14px;color:var(--text3)">
+      Trace: <code style="color:var(--accent2)">${traceId}</code> | Duration: <strong style="color:var(--text)">${totalDuration}ms</strong> | Spans: <strong style="color:var(--text)">${spans.length}</strong>
+    </div>
+    <div style="position:relative;min-width:600px">
+      <!-- Timeline header -->
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:8px;padding-left:200px">
+        <span>0ms</span><span>${Math.round(totalDuration/4)}ms</span><span>${Math.round(totalDuration/2)}ms</span><span>${Math.round(totalDuration*3/4)}ms</span><span>${totalDuration}ms</span>
+      </div>
+      ${spans.map(s => {
+        if (!svcColors[s.service]) svcColors[s.service] = palette[ci++ % palette.length];
+        const color = svcColors[s.service];
+        const spanStart = new Date(s.start_time).getTime() - traceStart;
+        const left = (spanStart / totalDuration * 100).toFixed(2);
+        const width = Math.max(0.5, (s.duration_ms / totalDuration * 100)).toFixed(2);
+        const indent = (s.depth || 0) * 12;
+        return `<div style="display:flex;align-items:center;height:28px;margin-bottom:2px">
+          <div style="width:200px;flex-shrink:0;padding-left:${indent}px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <span style="color:${color};font-weight:600">${s.service}</span>
+            <span style="color:var(--text3);margin-left:4px">${s.operation.length>25?s.operation.slice(0,25)+'...':s.operation}</span>
+          </div>
+          <div style="flex:1;position:relative;height:20px;background:var(--glass);border-radius:3px;overflow:hidden">
+            <div style="position:absolute;left:${left}%;width:${width}%;height:100%;background:${s.has_error?'var(--red)':color};border-radius:3px;opacity:0.85;min-width:2px" title="${s.service}: ${s.operation} (${s.duration_ms}ms)"></div>
+          </div>
+          <div style="width:60px;text-align:right;font-size:10px;color:${s.has_error?'var(--red)':'var(--text3)'};font-weight:${s.has_error?'700':'400'};padding-left:8px">${s.duration_ms}ms</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  detail.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// AUDIT LOG VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+
+const auditCatColors = {auth:'var(--accent2)',config:'var(--cyan)',alert:'var(--red)',incident:'var(--yellow)',oncall:'var(--purple)',workflow:'var(--green)',dashboard:'var(--accent)',status_page:'var(--orange,var(--yellow))',catalog:'var(--cyan)',api_key:'var(--purple)',user:'var(--accent2)',environment:'var(--green)'};
+const auditActionIcons = {create:'plus-circle',update:'edit-3',delete:'trash-2',login:'log-in',logout:'log-out',acknowledge:'check-circle',resolve:'check-check',escalate:'arrow-up-circle',toggle:'toggle-left',export:'download',import:'upload',override:'user-check'};
+
+async function loadAuditView() {
+  const category = document.getElementById('auditCategoryFilter')?.value || '';
+  const action = document.getElementById('auditActionFilter')?.value || '';
+
+  const [data, summary] = await Promise.all([
+    fetch(`${API}/api/audit?limit=50${category?'&category='+category:''}${action?'&action='+action:''}`).then(r => r.json()),
+    fetch(`${API}/api/audit/summary`).then(r => r.json()),
+  ]);
+
+  // Summary cards
+  document.getElementById('auditSummary').innerHTML = [
+    {label:'Total Entries', val:summary.total_entries, color:'var(--accent2)'},
+    {label:'Last 24h', val:summary.last_24h, color:'var(--green)'},
+    {label:'Last 7 Days', val:summary.last_7d, color:'var(--cyan)'},
+    {label:'Top Actor', val:summary.top_actors?.[0]?.actor||'—', color:'var(--purple)', small:true},
+  ].map(s => `
+    <div class="panel" style="padding:16px 18px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+      <div style="font-size:${s.small?'14':'28'}px;font-weight:${s.small?'600':'900'};color:${s.color};margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.val}</div>
+    </div>
+  `).join('');
+
+  // Entries
+  const entries = data.entries || [];
+  document.getElementById('auditEntries').innerHTML = entries.map(e => {
+    const cc = auditCatColors[e.category] || 'var(--text3)';
+    return `<div style="display:flex;align-items:flex-start;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--glass)'" onmouseout="this.style.background=''">
+      <div style="width:32px;height:32px;border-radius:var(--radius-sm);background:${cc}15;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px">
+        <i data-lucide="${auditActionIcons[e.action]||'activity'}" style="width:15px;height:15px;color:${cc}"></i>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:700">${e.actor_name||e.actor}</span>
+          <span class="badge" style="background:${cc}15;color:${cc};border:1px solid ${cc}30;font-size:9px">${e.action}</span>
+          <span class="badge" style="background:rgba(255,255,255,0.04);color:var(--text3);font-size:9px">${e.category}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">${e.description}</div>
+        ${e.resource_id ? `<div style="font-size:10px;color:var(--text3);margin-top:2px;font-family:monospace">${e.resource}: ${e.resource_id}</div>` : ''}
+      </div>
+      <div style="flex-shrink:0;text-align:right">
+        <div style="font-size:10px;color:var(--text3)">${timeAgo(e.created_at)}</div>
+        ${e.ip_address ? `<div style="font-size:9px;color:var(--text3);margin-top:2px;font-family:monospace">${e.ip_address}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No audit entries found</div>';
+  if (window.lucide) lucide.createIcons();
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENVIRONMENTS VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function loadEnvironmentsView() {
+  const [envs, summary] = await Promise.all([
+    fetch(`${API}/api/environments`).then(r => r.json()),
+    fetch(`${API}/api/environments/summary`).then(r => r.json()),
+  ]);
+
+  // Summary
+  document.getElementById('envSummary').innerHTML = [
+    {label:'Environments', val:summary.total, color:'var(--accent2)'},
+    {label:'Total Nodes', val:summary.total_nodes, color:'var(--green)'},
+    {label:'Total Alerts', val:summary.total_alerts, color:'var(--yellow)'},
+    {label:'Default', val:summary.default||'—', color:'var(--cyan)', small:true},
+  ].map(s => `
+    <div class="panel" style="padding:16px 18px">
+      <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+      <div style="font-size:${s.small?'14':'28'}px;font-weight:${s.small?'600':'900'};color:${s.color};margin-top:6px">${s.val}</div>
+    </div>
+  `).join('');
+
+  // Environment cards
+  const statusColors = {healthy:'var(--green)',degraded:'var(--yellow)',down:'var(--red)',standby:'var(--purple)'};
+  document.getElementById('envGrid').innerHTML = envs.map(e => `
+    <div class="panel" style="overflow:visible">
+      <div style="padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:var(--radius);background:${e.color}15;display:flex;align-items:center;justify-content:center">
+              <i data-lucide="${e.icon||'server'}" style="width:20px;height:20px;color:${e.color}"></i>
+            </div>
+            <div>
+              <div style="font-size:16px;font-weight:800">${e.name}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${e.description||''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <div style="width:8px;height:8px;border-radius:50%;background:${statusColors[e.status]||'var(--text3)'};box-shadow:0 0 6px ${statusColors[e.status]||'var(--text3)'}50"></div>
+            <span style="font-size:11px;font-weight:600;color:${statusColors[e.status]||'var(--text3)'};text-transform:capitalize">${e.status}</span>
+            ${e.is_default?'<span class="badge info" style="margin-left:6px">Default</span>':''}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">
+          <div style="font-size:12px"><span style="color:var(--text3)">Region:</span> <strong>${e.region||'—'}</strong></div>
+          <div style="font-size:12px"><span style="color:var(--text3)">Cluster:</span> <strong>${e.cluster||'—'}</strong></div>
+          <div style="font-size:12px"><span style="color:var(--text3)">Nodes:</span> <strong style="color:var(--green)">${e.node_count||0}</strong></div>
+          <div style="font-size:12px"><span style="color:var(--text3)">Active Alerts:</span> <strong style="color:${e.alert_count?'var(--yellow)':'var(--text)'}">${e.alert_count||0}</strong></div>
+        </div>
+
+        <div style="display:flex;gap:6px;margin-top:14px">
+          ${!e.is_default?`<button class="btn btn-secondary" style="font-size:11px;padding:5px 10px" onclick="setDefaultEnv('${e.id}')">Set Default</button>`:''}
+          ${!e.is_default?`<button class="btn btn-danger" style="font-size:11px;padding:5px 10px" onclick="deleteEnv('${e.id}')">Delete</button>`:''}
+        </div>
+      </div>
+    </div>
+  `).join('') || '<div class="empty">No environments configured</div>';
+  if (window.lucide) lucide.createIcons();
+}
+
+async function setDefaultEnv(id) {
+  await fetch(`${API}/api/environments/${id}/set-default`, {method:'POST'});
+  loadEnvironmentsView();
+  loadEnvSwitcher();
+}
+
+async function deleteEnv(id) {
+  if (!confirm('Delete this environment?')) return;
+  await fetch(`${API}/api/environments/${id}`, {method:'DELETE'});
+  loadEnvironmentsView();
+  loadEnvSwitcher();
+}
+
+function showCreateEnvModal() {
+  const name = prompt('Environment name:', 'New Environment');
+  if (!name) return;
+  const slug = prompt('Slug:', name.toLowerCase().replace(/\s+/g,'-'));
+  const region = prompt('Region:', 'us-east-1');
+  fetch(`${API}/api/environments`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, slug:slug||name.toLowerCase(), region:region||'', color:'#6366f1'})
+  }).then(() => { loadEnvironmentsView(); loadEnvSwitcher(); });
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WEBSOCKET LIVE UPDATES
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _ws = null;
+let _wsReconnectTimer = null;
+
+function connectWebSocket() {
+  if (_ws && _ws.readyState <= 1) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${proto}//${location.host}/ws/live`;
+  try {
+    _ws = new WebSocket(wsUrl);
+    _ws.onopen = () => { console.log('[WS] Connected'); };
+    _ws.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'metric_update') { loadStats(); }
+        if (msg.type === 'alert') { loadStats(); loadNotifications(); }
+        if (msg.type === 'incident') { loadStats(); loadNotifications(); }
+      } catch(e) {}
+    };
+    _ws.onclose = () => {
+      console.log('[WS] Disconnected, reconnecting in 5s...');
+      _wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+    };
+    _ws.onerror = () => { _ws.close(); };
+  } catch(e) {}
+}
+
+// Connect WebSocket on startup
+setTimeout(connectWebSocket, 2000);
+
 </script>
 </body>
 </html>

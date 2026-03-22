@@ -56,8 +56,12 @@ import statuspage as sp_mod
 import notifcenter as notif_mod
 import servicecatalog as catalog_mod
 import workflows as wf_mod
+import logalerts as logalert_mod
+import apm as apm_mod
+import environments as env_mod
+import auditlog as audit_mod
 
-app = FastAPI(title="PULSE", version="4.0.0", description="AI-powered unified infrastructure intelligence")
+app = FastAPI(title="PULSE", version="5.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.middleware("http")(rbac_middleware)
 app.middleware("http")(auth_middleware)
@@ -1798,6 +1802,172 @@ async def api_toggle_workflow(wf_id: str):
 @app.get("/api/workflows/{wf_id}/runs")
 async def api_workflow_runs(wf_id: str, limit: int = 20):
     return wf_mod.get_workflow_runs(wf_id, limit)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOG-BASED ALERTING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/log-alerts/rules")
+async def api_log_alert_rules(rule_type: str | None = None, severity: str | None = None):
+    return logalert_mod.list_rules(rule_type, severity)
+
+@app.get("/api/log-alerts/rules/types")
+async def api_log_alert_rule_types():
+    return logalert_mod.get_rule_types()
+
+@app.get("/api/log-alerts/summary")
+async def api_log_alert_summary():
+    return logalert_mod.get_summary()
+
+@app.get("/api/log-alerts/alerts")
+async def api_log_alerts_fired(limit: int = 50):
+    return logalert_mod.get_log_alerts(limit)
+
+@app.get("/api/log-alerts/rules/{rule_id}")
+async def api_get_log_rule(rule_id: str):
+    r = logalert_mod.get_rule(rule_id)
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    return r
+
+@app.post("/api/log-alerts/rules")
+async def api_create_log_rule(request: Request):
+    body = await request.json()
+    return logalert_mod.create_rule(body)
+
+@app.put("/api/log-alerts/rules/{rule_id}")
+async def api_update_log_rule(rule_id: str, request: Request):
+    body = await request.json()
+    r = logalert_mod.update_rule(rule_id, body)
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    return r
+
+@app.delete("/api/log-alerts/rules/{rule_id}")
+async def api_delete_log_rule(rule_id: str):
+    if not logalert_mod.delete_rule(rule_id):
+        raise HTTPException(404, "Rule not found")
+    return {"ok": True}
+
+@app.post("/api/log-alerts/rules/{rule_id}/toggle")
+async def api_toggle_log_rule(rule_id: str):
+    r = logalert_mod.toggle_rule(rule_id)
+    if not r:
+        raise HTTPException(404, "Rule not found")
+    return r
+
+@app.post("/api/log-alerts/rules/{rule_id}/test")
+async def api_test_log_rule(rule_id: str, request: Request):
+    body = await request.json()
+    return logalert_mod.test_rule(rule_id, body.get("sample", ""))
+
+@app.get("/api/log-alerts/rules/{rule_id}/hits")
+async def api_log_rule_hits(rule_id: str):
+    return logalert_mod.get_rule_hits(rule_id)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# APM / DISTRIBUTED TRACING
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/apm/traces")
+async def api_list_traces(service: str | None = None, status: str | None = None,
+                          min_duration: int | None = None, limit: int = 30):
+    return apm_mod.list_traces(service, status, min_duration, limit)
+
+@app.get("/api/apm/traces/{trace_id}")
+async def api_get_trace(trace_id: str):
+    t = apm_mod.get_trace(trace_id)
+    if not t:
+        raise HTTPException(404, "Trace not found")
+    return t
+
+@app.get("/api/apm/summary")
+async def api_apm_summary():
+    return apm_mod.get_apm_summary()
+
+@app.get("/api/apm/services")
+async def api_apm_services():
+    return apm_mod.get_trace_services()
+
+@app.get("/api/apm/service-map")
+async def api_apm_service_map():
+    return apm_mod.get_service_map()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MULTI-ENVIRONMENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/environments")
+async def api_list_environments():
+    return env_mod.list_environments()
+
+@app.get("/api/environments/summary")
+async def api_env_summary():
+    return env_mod.get_summary()
+
+@app.get("/api/environments/default")
+async def api_default_env():
+    e = env_mod.get_default_environment()
+    if not e:
+        raise HTTPException(404, "No default environment")
+    return e
+
+@app.get("/api/environments/{env_id}")
+async def api_get_environment(env_id: str):
+    e = env_mod.get_environment(env_id)
+    if not e:
+        raise HTTPException(404, "Environment not found")
+    return e
+
+@app.post("/api/environments")
+async def api_create_environment(request: Request):
+    body = await request.json()
+    return env_mod.create_environment(body)
+
+@app.put("/api/environments/{env_id}")
+async def api_update_environment(env_id: str, request: Request):
+    body = await request.json()
+    e = env_mod.update_environment(env_id, body)
+    if not e:
+        raise HTTPException(404, "Environment not found")
+    return e
+
+@app.delete("/api/environments/{env_id}")
+async def api_delete_environment(env_id: str):
+    if not env_mod.delete_environment(env_id):
+        raise HTTPException(400, "Cannot delete (default or not found)")
+    return {"ok": True}
+
+@app.post("/api/environments/{env_id}/set-default")
+async def api_set_default_env(env_id: str):
+    e = env_mod.set_default(env_id)
+    if not e:
+        raise HTTPException(404, "Environment not found")
+    return e
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUDIT LOG
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/audit")
+async def api_audit_list(category: str | None = None, action: str | None = None,
+                         actor: str | None = None, limit: int = 50, offset: int = 0):
+    return audit_mod.list_entries(category, action, actor, limit, offset)
+
+@app.get("/api/audit/summary")
+async def api_audit_summary():
+    return audit_mod.get_summary()
+
+@app.get("/api/audit/{entry_id}")
+async def api_audit_entry(entry_id: str):
+    e = audit_mod.get_entry(entry_id)
+    if not e:
+        raise HTTPException(404, "Entry not found")
+    return e
 
 
 # ══════════════════════════════════════════════════════════════════════════════
