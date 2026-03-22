@@ -2379,7 +2379,9 @@ async function loadKbView() {
 }
 
 function renderKbCard(e) {
-  const tags = (e.tags || []).map(t => `<span class="kb-tag">${t}</span>`).join('');
+  const rawTags = e.tags || [];
+  const tagArr = typeof rawTags === 'string' ? rawTags.split(',').map(t => t.trim()).filter(Boolean) : rawTags;
+  const tags = tagArr.map(t => `<span class="kb-tag">${t}</span>`).join('');
   const content = (e.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const preview = content.length > 300 ? content.slice(0, 300) + '…' : content;
   return `<div class="kb-card">
