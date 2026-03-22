@@ -1,0 +1,16 @@
+# CONFIGMAP — stores non-secret configuration
+# Like teams.yaml, rules.yaml, escalation.yaml
+# Difference from Secret: ConfigMap is for non-sensitive data you're OK showing
+# These get mounted as files inside the container (just like Docker volumes)
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pulse-config
+  namespace: pulse
+data:
+  # Non-secret environment variables
+  NODE_ID: "k8s-pulse-api"
+  COLLECT_INTERVAL: "10"
+  TECH_STACK: "fastapi,postgres,redis,kubernetes"
+  OLLAMA_MODEL: "llama3.1"

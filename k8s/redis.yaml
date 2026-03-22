@@ -1,0 +1,50 @@
+# REDIS — in-memory cache
+# Much simpler than PostgreSQL because Redis doesn't need persistent storage
+# (If Redis restarts, we lose cache — that's OK, it rebuilds quickly)
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: pulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pulse-redis
+  template:
+    metadata:
+      labels:
+        app: pulse-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "250m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: pulse
+spec:
+  selector:
+    app: pulse-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

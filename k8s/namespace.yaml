@@ -1,0 +1,10 @@
+# NAMESPACE — an isolated environment for all PULSE resources
+# Think of it like a separate folder. Keeps PULSE stuff away from other apps.
+# Without this, everything goes into "default" namespace which gets messy.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pulse
+  labels:
+    app: pulse

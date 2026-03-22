@@ -1,0 +1,115 @@
+# PULSE API — the main application
+# This is the most complex one because it:
+# - Connects to PostgreSQL and Redis
+# - Needs secrets (API keys) and config
+# - Needs to be accessible from outside the cluster (your browser)
+# - Can scale to multiple replicas for high availability
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pulse-api
+  namespace: pulse
+spec:
+  replicas: 2              # RUN 2 COPIES — if one crashes, the other handles traffic
+                           # This is why K8s is better than docker-compose
+                           # docker-compose: 1 copy, crashes = downtime
+                           # K8s: 2+ copies, crash = no downtime
+  selector:
+    matchLabels:
+      app: pulse-api
+  # ROLLING UPDATE STRATEGY — how K8s deploys new versions
+  # Instead of stopping everything and starting new version (downtime),
+  # it starts new pods first, then kills old ones. Zero downtime.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Start 1 extra pod during update
+      maxUnavailable: 0    # Never have 0 pods running
+  template:
+    metadata:
+      labels:
+        app: pulse-api
+    spec:
+      containers:
+        - name: api
+          image: pulse-api:latest
+          imagePullPolicy: Never   # Use local Docker image (minikube)
+          ports:
+            - containerPort: 8000
+          # ENVIRONMENT VARIABLES — mix of ConfigMap and Secrets
+          envFrom:
+            - configMapRef:
+                name: pulse-config     # All keys from ConfigMap become env vars
+          env:
+            # Secrets — pulled individually from the Secret object
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pulse-secrets
+                  key: POSTGRES_PASSWORD
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: pulse-secrets
+                  key: OPENAI_API_KEY
+            - name: TELEGRAM_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: pulse-secrets
+                  key: TELEGRAM_BOT_TOKEN
+            # Database connection — points to the postgres Service name
+            # Can't use $(VAR) interpolation here, so we hardcode the password
+            # In production, use an init container or entrypoint script to build this
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://postgres:pulse_secret@postgres:5432/pulse"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
+          # HEALTH CHECKS
+          readinessProbe:
+            httpGet:
+              path: /api/stats     # K8s hits this endpoint to check if API is ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/stats
+              port: 8000
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          # MOUNT config files from ConfigMap into the container
+          volumeMounts:
+            - name: config-files
+              mountPath: /app/config
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+      volumes:
+        - name: config-files
+          configMap:
+            name: pulse-config-files
+
+---
+# SERVICE — makes API reachable inside the cluster
+apiVersion: v1
+kind: Service
+metadata:
+  name: pulse-api
+  namespace: pulse
+spec:
+  selector:
+    app: pulse-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+  type: NodePort           # Makes it accessible from OUTSIDE the cluster
+                           # ClusterIP = only inside cluster
+                           # NodePort = accessible from your Mac
+                           # LoadBalancer = gets a public IP (cloud only)

@@ -1,0 +1,64 @@
+# AGENT — the metric collector
+# Uses a DAEMONSET instead of Deployment
+#
+# Deployment: "run N copies somewhere in the cluster"
+# DaemonSet:  "run EXACTLY ONE copy on EVERY node in the cluster"
+#
+# This is perfect for monitoring agents — you want one collector
+# on every server so you get metrics from all of them.
+# When you add a new server to the cluster, K8s automatically
+# deploys the agent there. No manual setup.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: pulse-agent
+  namespace: pulse
+spec:
+  selector:
+    matchLabels:
+      app: pulse-agent
+  template:
+    metadata:
+      labels:
+        app: pulse-agent
+    spec:
+      containers:
+        - name: agent
+          image: pulse-agent:latest
+          imagePullPolicy: Never
+          env:
+            - name: PULSE_API_URL
+              value: "http://pulse-api:8000"   # Points to the API Service
+            - name: COLLECT_INTERVAL
+              value: "10"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"       # Very lightweight — just collects metrics
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          # Give agent access to host metrics (CPU, memory, disk)
+          # Without this, it only sees the container's metrics, not the host
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+      # TOLERATIONS — run even on master/control-plane nodes
+      # By default K8s doesn't schedule workloads on master nodes
+      # But we want to monitor EVERYTHING
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule

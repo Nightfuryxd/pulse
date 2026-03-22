@@ -1,0 +1,100 @@
+# POSTGRESQL — the database
+# Three K8s objects here:
+#
+# 1. PersistentVolumeClaim (PVC) — reserves disk space
+#    Without this, database data disappears when pod restarts!
+#    Think: "I need 5GB of disk that survives crashes"
+#
+# 2. Deployment — runs the PostgreSQL container
+#    Tells K8s: "always keep 1 postgres pod running"
+#    If it crashes, K8s auto-restarts it
+#
+# 3. Service — gives postgres a stable network name
+#    Other pods connect to "postgres:5432" — K8s routes it to the right pod
+#    Even if the pod IP changes (after restart), the Service name stays the same
+
+---
+# DISK STORAGE — survives pod restarts
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: pulse
+spec:
+  accessModes:
+    - ReadWriteOnce        # Only one pod can write at a time
+  resources:
+    requests:
+      storage: 5Gi         # 5 GB of disk space
+
+---
+# THE POSTGRESQL POD
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: pulse
+spec:
+  replicas: 1              # Only 1 database instance (databases don't scale horizontally easily)
+  selector:
+    matchLabels:
+      app: pulse-postgres  # How K8s finds pods belonging to this Deployment
+  template:
+    metadata:
+      labels:
+        app: pulse-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine    # Same image as docker-compose
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:          # Pull password from Secret (not hardcoded!)
+                  name: pulse-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "pulse"
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data   # Where postgres stores data
+          # HEALTH CHECK — K8s checks if postgres is actually working
+          # If this fails, K8s restarts the pod automatically
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              memory: "256Mi"   # Minimum memory guaranteed
+              cpu: "250m"       # 250 millicores = 0.25 CPU
+            limits:
+              memory: "512Mi"   # Maximum memory allowed
+              cpu: "500m"       # If it tries to use more, K8s throttles it
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-data   # Link to the PVC we defined above
+
+---
+# NETWORK ADDRESS — other pods use "postgres" as hostname
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: pulse
+spec:
+  selector:
+    app: pulse-postgres    # Route traffic to pods with this label
+  ports:
+    - port: 5432           # The port other pods connect to
+      targetPort: 5432     # The port the container listens on
+  clusterIP: None          # "Headless" service — direct pod connection (best for databases)
