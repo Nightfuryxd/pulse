@@ -35,6 +35,14 @@ COLLECT_INTERVAL = int(os.getenv("COLLECT_INTERVAL", "10"))
 LOG_PATHS        = os.getenv("LOG_PATHS", "/var/log/syslog,/var/log/auth.log").split(",")
 SNMP_TARGETS     = os.getenv("SNMP_TARGETS", "").split(",")
 SSH_TARGETS      = os.getenv("SSH_TARGETS", "").split(",")
+# SNMP v3 config (set SNMP_VERSION=3 to enable)
+SNMP_VERSION     = os.getenv("SNMP_VERSION", "2c")           # "2c" or "3"
+SNMP_V3_USER     = os.getenv("SNMP_V3_USER", "")             # USM username
+SNMP_V3_AUTH_KEY = os.getenv("SNMP_V3_AUTH_KEY", "")          # Authentication passphrase
+SNMP_V3_PRIV_KEY = os.getenv("SNMP_V3_PRIV_KEY", "")         # Privacy (encryption) passphrase
+SNMP_V3_AUTH_PROTO = os.getenv("SNMP_V3_AUTH_PROTO", "SHA")   # SHA, SHA224, SHA256, SHA384, SHA512, MD5
+SNMP_V3_PRIV_PROTO = os.getenv("SNMP_V3_PRIV_PROTO", "AES")  # AES, AES192, AES256, DES, 3DES
+SNMP_V3_SECURITY_LEVEL = os.getenv("SNMP_V3_SECURITY_LEVEL", "authPriv")  # noAuthNoPriv, authNoPriv, authPriv
 ENABLE_DISCOVERY = os.getenv("ENABLE_DISCOVERY", "false").lower() == "true"
 NETWORK_RANGE    = os.getenv("NETWORK_RANGE", "")
 ENABLE_K8S       = os.getenv("ENABLE_K8S", "false").lower() == "true"
@@ -365,22 +373,121 @@ SNMP_IF_TABLE = {
 }
 
 
-async def poll_snmp_device(target: str, community: str = "public", port: int = 161) -> Optional[dict]:
+def _get_snmp_v3_auth(version: str = "", user: str = "", auth_key: str = "",
+                      priv_key: str = "", auth_proto: str = "SHA",
+                      priv_proto: str = "AES", security_level: str = "authPriv",
+                      community: str = "public"):
     """
-    Poll a single device via SNMP v2c.
+    Build the correct pysnmp auth object for v2c or v3.
+
+    SNMPv3 security levels:
+      noAuthNoPriv — username only, no encryption (testing only)
+      authNoPriv   — username + auth password (authenticated but not encrypted)
+      authPriv     — username + auth password + privacy password (full security)
+
+    Auth protocols: MD5, SHA, SHA224, SHA256, SHA384, SHA512
+    Priv protocols: DES, 3DES, AES, AES192, AES256
+    """
+    from pysnmp.hlapi.asyncio import CommunityData
+
+    if version != "3":
+        return CommunityData(community, mpModel=1)  # SNMPv2c
+
+    from pysnmp.hlapi.asyncio import UsmUserData
+
+    # Map protocol names to pysnmp objects
+    AUTH_PROTOS = {}
+    PRIV_PROTOS = {}
+    try:
+        from pysnmp.hlapi.asyncio import (
+            usmHMACSHAAuthProtocol, usmHMACMD5AuthProtocol,
+            usmAesCfb128Protocol, usmDESPrivProtocol,
+            usmNoAuthProtocol, usmNoPrivProtocol,
+        )
+        AUTH_PROTOS = {
+            "SHA": usmHMACSHAAuthProtocol,
+            "MD5": usmHMACMD5AuthProtocol,
+            "NONE": usmNoAuthProtocol,
+        }
+        PRIV_PROTOS = {
+            "AES": usmAesCfb128Protocol,
+            "AES128": usmAesCfb128Protocol,
+            "DES": usmDESPrivProtocol,
+            "NONE": usmNoPrivProtocol,
+        }
+        # Extended protocols (may not be available in all pysnmp versions)
+        try:
+            from pysnmp.hlapi.asyncio import usmHMAC128SHA224AuthProtocol, usmHMAC192SHA256AuthProtocol
+            AUTH_PROTOS["SHA224"] = usmHMAC128SHA224AuthProtocol
+            AUTH_PROTOS["SHA256"] = usmHMAC192SHA256AuthProtocol
+        except ImportError:
+            pass
+        try:
+            from pysnmp.hlapi.asyncio import usmHMAC256SHA384AuthProtocol, usmHMAC384SHA512AuthProtocol
+            AUTH_PROTOS["SHA384"] = usmHMAC256SHA384AuthProtocol
+            AUTH_PROTOS["SHA512"] = usmHMAC384SHA512AuthProtocol
+        except ImportError:
+            pass
+        try:
+            from pysnmp.hlapi.asyncio import usmAesCfb192Protocol, usmAesCfb256Protocol
+            PRIV_PROTOS["AES192"] = usmAesCfb192Protocol
+            PRIV_PROTOS["AES256"] = usmAesCfb256Protocol
+        except ImportError:
+            pass
+        try:
+            from pysnmp.hlapi.asyncio import usm3DESEDEPrivProtocol
+            PRIV_PROTOS["3DES"] = usm3DESEDEPrivProtocol
+        except ImportError:
+            pass
+    except ImportError:
+        pass
+
+    auth_protocol = AUTH_PROTOS.get(auth_proto.upper(), AUTH_PROTOS.get("SHA"))
+    priv_protocol = PRIV_PROTOS.get(priv_proto.upper(), PRIV_PROTOS.get("AES"))
+
+    if security_level == "noAuthNoPriv":
+        return UsmUserData(user)
+    elif security_level == "authNoPriv":
+        return UsmUserData(user, auth_key, authProtocol=auth_protocol)
+    else:  # authPriv (default — most secure)
+        return UsmUserData(user, auth_key, priv_key,
+                           authProtocol=auth_protocol, privProtocol=priv_protocol)
+
+
+async def poll_snmp_device(target: str, community: str = "public", port: int = 161,
+                           version: str = "", v3_user: str = "", v3_auth_key: str = "",
+                           v3_priv_key: str = "", v3_auth_proto: str = "SHA",
+                           v3_priv_proto: str = "AES", v3_security_level: str = "authPriv") -> Optional[dict]:
+    """
+    Poll a single device via SNMP v2c or v3.
     Returns a metrics dict compatible with /api/ingest/metrics.
     Requires: pip install pysnmp
+
+    v3 adds: authentication (SHA/MD5) + encryption (AES/DES) — required for
+    enterprise/government security compliance.
     """
     try:
         from pysnmp.hlapi.asyncio import (
-            SnmpEngine, CommunityData, UdpTransportTarget,
+            SnmpEngine, UdpTransportTarget,
             ContextData, ObjectType, ObjectIdentity, getCmd, nextCmd
         )
     except ImportError:
         return None  # pysnmp not installed — skip silently
 
+    # Use globals as defaults if per-target not specified
+    snmp_ver = version or SNMP_VERSION
+    user     = v3_user or SNMP_V3_USER
+    auth_key = v3_auth_key or SNMP_V3_AUTH_KEY
+    priv_key = v3_priv_key or SNMP_V3_PRIV_KEY
+
     engine    = SnmpEngine()
-    auth      = CommunityData(community, mpModel=1)  # SNMPv2c
+    auth      = _get_snmp_v3_auth(
+        version=snmp_ver, user=user, auth_key=auth_key, priv_key=priv_key,
+        auth_proto=v3_auth_proto or SNMP_V3_AUTH_PROTO,
+        priv_proto=v3_priv_proto or SNMP_V3_PRIV_PROTO,
+        security_level=v3_security_level or SNMP_V3_SECURITY_LEVEL,
+        community=community,
+    )
     transport = UdpTransportTarget((target, port), timeout=3, retries=1)
     ctx       = ContextData()
 
@@ -470,12 +577,18 @@ async def poll_snmp_device(target: str, community: str = "public", port: int = 1
 
 
 async def collect_snmp_targets(targets: list[str]) -> list[dict]:
-    """Poll all configured SNMP targets in parallel."""
+    """Poll all configured SNMP targets in parallel (v2c or v3)."""
     if not targets or targets == [""]:
         return []
     community = os.getenv("SNMP_COMMUNITY", "public")
     results   = await asyncio.gather(
-        *[poll_snmp_device(t.strip(), community) for t in targets if t.strip()],
+        *[poll_snmp_device(
+            t.strip(), community,
+            version=SNMP_VERSION,
+            v3_user=SNMP_V3_USER, v3_auth_key=SNMP_V3_AUTH_KEY,
+            v3_priv_key=SNMP_V3_PRIV_KEY, v3_auth_proto=SNMP_V3_AUTH_PROTO,
+            v3_priv_proto=SNMP_V3_PRIV_PROTO, v3_security_level=SNMP_V3_SECURITY_LEVEL,
+        ) for t in targets if t.strip()],
         return_exceptions=True
     )
     return [r for r in results if isinstance(r, dict)]
@@ -600,15 +713,21 @@ async def _ping(ip: str) -> bool:
 
 
 async def _probe_snmp(ip: str) -> bool:
-    """Returns True if the host responds to SNMP v2c GET on sysDescr."""
+    """Returns True if the host responds to SNMP GET on sysDescr (v2c or v3)."""
     try:
         from pysnmp.hlapi.asyncio import (
-            SnmpEngine, CommunityData, UdpTransportTarget,
+            SnmpEngine, UdpTransportTarget,
             ContextData, ObjectType, ObjectIdentity, getCmd
         )
         community = os.getenv("SNMP_COMMUNITY", "public")
+        auth = _get_snmp_v3_auth(
+            version=SNMP_VERSION, user=SNMP_V3_USER,
+            auth_key=SNMP_V3_AUTH_KEY, priv_key=SNMP_V3_PRIV_KEY,
+            auth_proto=SNMP_V3_AUTH_PROTO, priv_proto=SNMP_V3_PRIV_PROTO,
+            security_level=SNMP_V3_SECURITY_LEVEL, community=community,
+        )
         err_ind, err_stat, _, _ = await getCmd(
-            SnmpEngine(), CommunityData(community, mpModel=1),
+            SnmpEngine(), auth,
             UdpTransportTarget((ip, 161), timeout=2, retries=0),
             ContextData(), ObjectType(ObjectIdentity("1.3.6.1.2.1.1.1.0"))
         )
@@ -692,7 +811,9 @@ async def main():
     print(f"[Agent] PULSE Universal Collector starting")
     print(f"[Agent] Node: {NODE_ID} | API: {API_URL} | Interval: {COLLECT_INTERVAL}s")
     print(f"[Agent] OS: {OS_INFO} | IP: {IP}")
-    print(f"[Agent] SNMP targets: {[t for t in SNMP_TARGETS if t]}")
+    print(f"[Agent] SNMP targets: {[t for t in SNMP_TARGETS if t]} (version={SNMP_VERSION})")
+    if SNMP_VERSION == "3":
+        print(f"[Agent] SNMPv3: user={SNMP_V3_USER} auth={SNMP_V3_AUTH_PROTO} priv={SNMP_V3_PRIV_PROTO} level={SNMP_V3_SECURITY_LEVEL}")
     print(f"[Agent] SSH  targets: {[t for t in SSH_TARGETS  if t]}")
 
     # Wait for API to be ready

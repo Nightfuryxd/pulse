@@ -207,6 +207,25 @@ Each commit is a save point you can always go back to.
 
 **SNMP** — Protocol for talking to network devices (routers, switches). You send "what's your CPU usage?" and the device responds. PULSE polls devices every 10 seconds this way.
 
+**SNMP v2c vs v3:**
+- **v2c** — Uses a "community string" (basically a password in plain text). Fine for labs, NOT for production.
+- **v3** — Adds real security: username authentication (SHA/MD5) + encryption (AES/DES). Required by enterprise/government compliance standards. PULSE supports both.
+
+```bash
+# v2c (simple, insecure)
+SNMP_VERSION=2c
+SNMP_COMMUNITY=public
+
+# v3 (secure — use this in production)
+SNMP_VERSION=3
+SNMP_V3_USER=pulseMonitor
+SNMP_V3_AUTH_KEY=MyAuthPass123
+SNMP_V3_PRIV_KEY=MyPrivPass456
+SNMP_V3_AUTH_PROTO=SHA          # authentication hash
+SNMP_V3_PRIV_PROTO=AES          # encryption algorithm
+SNMP_V3_SECURITY_LEVEL=authPriv # full auth + encryption
+```
+
 ---
 
 ## 8. What DevOps Actually Means

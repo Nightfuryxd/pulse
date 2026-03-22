@@ -10,8 +10,8 @@
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **Open Source** | Yes | No | No | No | No | No (100 free sensors) | Core only | Yes (GPL) | Raw only | Yes (Apache/AGPL) | No |
 | **Servers (Linux/Win/Mac)** | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes (exporters) | Yes |
-| **Network (SNMP)** | Yes (v2c) | Yes (NPM) | Yes (basic) | Limited | Yes (deep) | Yes (deep) | Yes (plugins) | Yes (v1/v2c/v3) | Yes (v1/v2c/v3) | Yes (exporter) | Yes (deep) |
-| **SNMP v3** | No | Yes | Yes | Limited | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Network (SNMP)** | Yes (v2c+v3) | Yes (NPM) | Yes (basic) | Limited | Yes (deep) | Yes (deep) | Yes (plugins) | Yes (v1/v2c/v3) | Yes (v1/v2c/v3) | Yes (exporter) | Yes (deep) |
+| **SNMP v3** | Yes (SHA/AES/DES) | Yes | Yes | Limited | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | **Containers (Docker)** | Yes (agent) | Yes | Yes | Yes | Basic | Basic | No | Yes | Yes | Yes (cAdvisor) | No |
 | **Kubernetes** | Yes (pods/nodes/deploy) | Yes (deep) | Yes (deep+Pixie) | Yes (deep) | No | No | No | Basic | Good | Yes (native) | No |
 | **Cloud - AWS** | No | 100+ svcs | 80+ svcs | 80+ svcs | Shallow | Basic | Minimal | Moderate | 30+ svcs | Yes (exporters) | Basic |
@@ -76,7 +76,7 @@
 | 3 | **APM / Distributed Tracing** | Code-level visibility is table stakes | DONE (Phase 2) — OTel + SDK span ingest |
 | 4 | **Log Management** | Third pillar of observability | DONE (Phase 2) — ingest, search, trace correlation |
 | 5 | **OpenTelemetry Support** | Industry standard | DONE (Phase 2) — OTLP/HTTP for metrics, traces, logs |
-| 6 | **SNMP v3** | Required for enterprise/gov security compliance | Pending |
+| 6 | **SNMP v3** | Required for enterprise/gov security compliance | DONE — SHA/MD5/SHA256/SHA512 auth + AES/DES/3DES encryption |
 | 7 | **Email Alerts** | Most basic alerting channel | DONE (Phase 1) — SMTP provider |
 | 8 | **Generic Webhooks** | Enables any integration without custom code | DONE (Phase 1) — webhook provider |
 | 9 | **Anomaly Detection (ML)** | Static thresholds miss slow degradation | DONE (Phase 2) — z-score baselines |
