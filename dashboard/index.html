@@ -1157,11 +1157,11 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
           <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--surface2);border-radius:var(--radius-sm)">
               <div><div style="font-weight:600;font-size:13px">Clear all alerts</div><div style="font-size:11px;color:var(--text3)">Resolve all open alerts</div></div>
-              <button class="btn btn-danger" onclick="if(confirm('Resolve ALL open alerts?'))clearAllAlerts()">Clear</button>
+              <button class="btn btn-danger" onclick="pulseConfirm('Resolve ALL open alerts?').then(ok=>{if(ok)clearAllAlerts()})">Clear</button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--surface2);border-radius:var(--radius-sm)">
               <div><div style="font-weight:600;font-size:13px">Reset onboarding</div><div style="font-size:11px;color:var(--text3)">Re-run setup wizard</div></div>
-              <button class="btn btn-danger" onclick="if(confirm('Reset onboarding?'))resetOnboarding()">Reset</button>
+              <button class="btn btn-danger" onclick="pulseConfirm('Reset onboarding?').then(ok=>{if(ok)resetOnboarding()})">Reset</button>
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--surface2);border-radius:var(--radius-sm)">
               <div><div style="font-weight:600;font-size:13px">Sign out</div><div style="font-size:11px;color:var(--text3)">Clear session</div></div>
@@ -2728,7 +2728,7 @@ async function saveKbEntry() {
 }
 
 async function deleteKbEntry(id) {
-  if (!confirm('Delete this KB entry?')) return;
+  if (!await pulseConfirm('Delete this KB entry?')) return;
   await fetch(`${API}/api/kb/entries/${id}`, {method:'DELETE'});
   loadKbView(); loadStats();
 }
@@ -3013,6 +3013,85 @@ function showToast(type, title, body) {
   if (c.children.length > 5) c.removeChild(c.firstChild);
 }
 
+// ── Modal Utilities (replaces browser prompt/confirm/alert) ──────────────
+function _createModal(id, inner) {
+  const old = document.getElementById(id); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay'; ov.id = id;
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+  ov.innerHTML = `<div class="modal">${inner}</div>`;
+  document.body.appendChild(ov);
+  const first = ov.querySelector('input,select,textarea'); if (first) first.focus();
+  return ov;
+}
+
+function pulseConfirm(message) {
+  return new Promise(resolve => {
+    const id = '_confirmModal';
+    const inner = `<div class="modal-title">Confirm</div>
+      <p style="color:var(--text2);line-height:1.6;margin-bottom:16px">${message}</p>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="_cfCancel">Cancel</button>
+        <button class="btn btn-primary" id="_cfOk">Confirm</button>
+      </div>`;
+    const ov = _createModal(id, inner);
+    ov.querySelector('#_cfCancel').onclick = () => { ov.remove(); resolve(false); };
+    ov.querySelector('#_cfOk').onclick = () => { ov.remove(); resolve(true); };
+  });
+}
+
+function pulsePrompt(label, defaultVal) {
+  return new Promise(resolve => {
+    const id = '_promptModal';
+    const inner = `<div class="modal-title">${label}</div>
+      <input class="input" id="_prInput" value="${defaultVal||''}" style="width:100%;margin-bottom:16px" />
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="_prCancel">Cancel</button>
+        <button class="btn btn-primary" id="_prOk">OK</button>
+      </div>`;
+    const ov = _createModal(id, inner);
+    const inp = ov.querySelector('#_prInput');
+    inp.addEventListener('keydown', e => { if (e.key==='Enter') { ov.remove(); resolve(inp.value); }});
+    ov.querySelector('#_prCancel').onclick = () => { ov.remove(); resolve(null); };
+    ov.querySelector('#_prOk').onclick = () => { ov.remove(); resolve(inp.value); };
+  });
+}
+
+function pulseMultiPrompt(title, fields) {
+  return new Promise(resolve => {
+    const id = '_multiPromptModal';
+    const fieldsHtml = fields.map((f,i) => `
+      <label style="display:block;margin-bottom:12px">
+        <span style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">${f.label}</span>
+        ${f.type==='select'
+          ? `<select class="input" id="_mp${i}" style="width:100%">${f.options.map(o=>`<option value="${o}" ${o===f.default?'selected':''}>${o}</option>`).join('')}</select>`
+          : `<input class="input" id="_mp${i}" value="${f.default||''}" placeholder="${f.placeholder||''}" style="width:100%" />`}
+      </label>`).join('');
+    const inner = `<div class="modal-title">${title}</div>${fieldsHtml}
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="_mpCancel">Cancel</button>
+        <button class="btn btn-primary" id="_mpOk">Create</button>
+      </div>`;
+    const ov = _createModal(id, inner);
+    ov.querySelector('#_mpCancel').onclick = () => { ov.remove(); resolve(null); };
+    ov.querySelector('#_mpOk').onclick = () => {
+      const vals = {}; fields.forEach((f,i) => { vals[f.key] = document.getElementById(`_mp${i}`).value; });
+      ov.remove(); resolve(vals);
+    };
+  });
+}
+
+function pulseAlert(title, message) {
+  const id = '_alertModal';
+  const inner = `<div class="modal-title">${title}</div>
+    <div style="color:var(--text2);line-height:1.6;margin-bottom:16px;white-space:pre-wrap;max-height:60vh;overflow-y:auto;font-size:13px">${message}</div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="_alOk">OK</button>
+    </div>`;
+  const ov = _createModal(id, inner);
+  ov.querySelector('#_alOk').onclick = () => ov.remove();
+}
+
 // ── Alert Rules Manager ───────────────────────────────────────────────────
 async function loadRulesView() {
   const data = await fetch(`${API}/api/rules`).then(r=>r.json()).catch(()=>({rules:[]}));
@@ -3034,7 +3113,7 @@ async function loadRulesView() {
         <td><span style="font-size:11px;color:${enabled?'var(--green)':'var(--text3)'};cursor:pointer;font-weight:600" onclick="toggleRule('${r.id}',${!enabled})">${enabled?'Enabled':'Disabled'}</span></td>
         <td style="white-space:nowrap">
           <button class="filter-btn" onclick="showRuleModal('${r.id}')" style="font-size:11px">Edit</button>
-          <button class="filter-btn" onclick="if(confirm('Delete rule ${r.name}?'))deleteRuleUI('${r.id}')" style="font-size:11px;color:#fca5a5">Delete</button>
+          <button class="filter-btn" onclick="pulseConfirm('Delete rule ${r.name}?').then(ok=>{if(ok)deleteRuleUI('${r.id}')})" style="font-size:11px;color:#fca5a5">Delete</button>
         </td>
       </tr>`;
     }).join('')}</tbody>
@@ -3399,7 +3478,7 @@ async function createApiKey() {
 }
 
 async function revokeKey(id) {
-  if (!confirm('Revoke this API key?')) return;
+  if (!await pulseConfirm('Revoke this API key?')) return;
   await fetch(`${API}/api/admin/keys/${id}/revoke`, {method:'POST'});
   loadApiKeys();
 }
@@ -3596,15 +3675,18 @@ function renderDepGraph(services) {
   if (window.lucide) lucide.createIcons();
 }
 
-function showCreateCatalogServiceModal() {
-  const name = prompt('Service name:');
-  if (!name) return;
-  const desc = prompt('Description:', '');
-  const tier = prompt('Tier (tier-0, tier-1, tier-2):', 'tier-2');
-  fetch(`${API}/api/catalog/services`, {
+async function showCreateCatalogServiceModal() {
+  const vals = await pulseMultiPrompt('Add Service', [
+    {key:'name', label:'Service Name', placeholder:'e.g. auth-service'},
+    {key:'desc', label:'Description', placeholder:'What this service does'},
+    {key:'tier', label:'Tier', type:'select', options:['tier-0','tier-1','tier-2'], default:'tier-2'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/catalog/services`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, description:desc||'', tier:tier||'tier-2', tags:[]})
-  }).then(() => loadCatalogView());
+    body: JSON.stringify({name:vals.name, description:vals.desc||'', tier:vals.tier||'tier-2', tags:[]})
+  });
+  loadCatalogView();
 }
 
 
@@ -3694,15 +3776,15 @@ async function toggleWorkflow(id) {
 }
 
 async function deleteWorkflow(id) {
-  if (!confirm('Delete this workflow?')) return;
+  if (!await pulseConfirm('Delete this workflow?')) return;
   await fetch(`${API}/api/workflows/${id}`, {method:'DELETE'});
   loadWorkflowsView();
 }
 
-function showCreateWorkflowModal() {
-  const name = prompt('Workflow name:', 'New Workflow');
+async function showCreateWorkflowModal() {
+  const name = await pulsePrompt('Workflow name', 'New Workflow');
   if (!name) return;
-  fetch(`${API}/api/workflows`, {
+  await fetch(`${API}/api/workflows`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       name,
@@ -3711,7 +3793,8 @@ function showCreateWorkflowModal() {
       conditions: [{type:'time_window', params:{minutes:5}}],
       actions: [{type:'notify', params:{channel:'slack', target:'#alerts', message:'Threshold exceeded'}}],
     })
-  }).then(() => loadWorkflowsView());
+  });
+  loadWorkflowsView();
 }
 
 
@@ -3886,18 +3969,19 @@ async function duplicateDash(id) {
 }
 
 async function deleteDash(id) {
-  if (!confirm('Delete this dashboard?')) return;
+  if (!await pulseConfirm('Delete this dashboard?')) return;
   await fetch(`${API}/api/dashboards/${id}`, {method:'DELETE'});
   loadCustomDashboards();
 }
 
-function showCreateDashModal() {
-  const name = prompt('Dashboard name:', 'My Dashboard');
+async function showCreateDashModal() {
+  const name = await pulsePrompt('Dashboard name', 'My Dashboard');
   if (!name) return;
-  fetch(`${API}/api/dashboards`, {
+  const d = await fetch(`${API}/api/dashboards`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({name, description:'', widgets:[]})
-  }).then(r => r.json()).then(d => openDashEditor(d.id));
+  }).then(r => r.json());
+  openDashEditor(d.id);
 }
 
 function showAddWidgetModal() {
@@ -4026,26 +4110,30 @@ async function loadOnCallView() {
   if (window.lucide) lucide.createIcons();
 }
 
-function showCreateScheduleModal() {
-  const name = prompt('Schedule name:', 'New Rotation');
+async function showCreateScheduleModal() {
+  const name = await pulsePrompt('Schedule name', 'New Rotation');
   if (!name) return;
-  fetch(`${API}/api/oncall/schedules`, {
+  await fetch(`${API}/api/oncall/schedules`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({name, rotation_type:'weekly', handoff_time:'09:00', members:[
       {name:'Team Member 1', email:'member1@company.com'},
       {name:'Team Member 2', email:'member2@company.com'},
     ]})
-  }).then(() => loadOnCallView());
+  });
+  loadOnCallView();
 }
 
-function showCreateOverrideModal() {
-  const name = prompt('Override to (person name):');
-  if (!name) return;
-  const hours = prompt('Duration (hours):', '8');
-  fetch(`${API}/api/oncall/overrides`, {
+async function showCreateOverrideModal() {
+  const vals = await pulseMultiPrompt('Create Override', [
+    {key:'name', label:'Override to (person name)', placeholder:'e.g. Alex Chen'},
+    {key:'hours', label:'Duration (hours)', default:'8'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/oncall/overrides`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({user:{name, email:name.toLowerCase().replace(/\s/g,'.')+'@pulse.dev'}, reason:'Manual override'})
-  }).then(() => loadOnCallView());
+    body: JSON.stringify({user:{name:vals.name, email:vals.name.toLowerCase().replace(/\s/g,'.')+'@pulse.dev'}, reason:'Manual override'})
+  });
+  loadOnCallView();
 }
 
 async function deleteOverride(id) {
@@ -4139,33 +4227,39 @@ async function updateServiceStatus(id, status) {
 }
 
 async function deleteService(id) {
-  if (!confirm('Remove this service from the status page?')) return;
+  if (!await pulseConfirm('Remove this service from the status page?')) return;
   await fetch(`${API}/api/status/services/${id}`, {method:'DELETE'});
   loadStatusPageView();
 }
 
-function showCreateServiceModal() {
-  const name = prompt('Service name:', 'New Service');
-  if (!name) return;
-  const desc = prompt('Description:', '');
-  fetch(`${API}/api/status/services`, {
+async function showCreateServiceModal() {
+  const vals = await pulseMultiPrompt('Add Status Page Service', [
+    {key:'name', label:'Service Name', placeholder:'e.g. API Gateway'},
+    {key:'desc', label:'Description', placeholder:'Brief description'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/status/services`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, description: desc || '', group:'Core Infrastructure'})
-  }).then(() => loadStatusPageView());
+    body: JSON.stringify({name:vals.name, description:vals.desc||'', group:'Core Infrastructure'})
+  });
+  loadStatusPageView();
 }
 
-function showCreateStatusIncidentModal() {
-  const title = prompt('Incident title:', '');
-  if (!title) return;
-  const message = prompt('Initial message:', 'We are investigating this issue.');
-  fetch(`${API}/api/status/incidents`, {
+async function showCreateStatusIncidentModal() {
+  const vals = await pulseMultiPrompt('Create Status Incident', [
+    {key:'title', label:'Incident Title', placeholder:'e.g. API latency degradation'},
+    {key:'message', label:'Initial Message', default:'We are investigating this issue.'}
+  ]);
+  if (!vals || !vals.title) return;
+  await fetch(`${API}/api/status/incidents`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({title, message: message || 'Investigating', impact:'partial_outage'})
-  }).then(() => loadStatusPageView());
+    body: JSON.stringify({title:vals.title, message:vals.message||'Investigating', impact:'partial_outage'})
+  });
+  loadStatusPageView();
 }
 
 async function updateStatusIncident(id) {
-  const message = prompt('Update message:');
+  const message = await pulsePrompt('Update message');
   if (!message) return;
   await fetch(`${API}/api/status/incidents/${id}`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
@@ -4175,7 +4269,7 @@ async function updateStatusIncident(id) {
 }
 
 async function resolveStatusIncident(id) {
-  const message = prompt('Resolution message:', 'Issue has been resolved.');
+  const message = await pulsePrompt('Resolution message', 'Issue has been resolved.');
   await fetch(`${API}/api/status/incidents/${id}`, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({message: message || 'Resolved', status:'resolved'})
@@ -4369,23 +4463,26 @@ async function toggleLogRule(id) {
 }
 
 async function deleteLogRule(id) {
-  if (!confirm('Delete this log alert rule?')) return;
+  if (!await pulseConfirm('Delete this log alert rule?')) return;
   await fetch(`${API}/api/log-alerts/rules/${id}`, {method:'DELETE'});
   loadLogAlertsView();
 }
 
-function showCreateLogRuleModal() {
-  const name = prompt('Rule name:', 'New Log Rule');
-  if (!name) return;
-  const type = prompt('Type (keyword, regex, rate, absence):', 'keyword');
-  const pattern = prompt('Pattern (keyword or regex):', 'ERROR|error');
-  const severity = prompt('Severity (info, low, medium, high, critical):', 'high');
-  const threshold = parseInt(prompt('Threshold (count):', '1')) || 1;
-  const window_minutes = parseInt(prompt('Window (minutes):', '5')) || 5;
-  fetch(`${API}/api/log-alerts/rules`, {
+async function showCreateLogRuleModal() {
+  const vals = await pulseMultiPrompt('Create Log Alert Rule', [
+    {key:'name', label:'Rule Name', default:'New Log Rule'},
+    {key:'type', label:'Type', type:'select', options:['keyword','regex','rate','absence'], default:'keyword'},
+    {key:'pattern', label:'Pattern (keyword or regex)', default:'ERROR|error'},
+    {key:'severity', label:'Severity', type:'select', options:['info','low','medium','high','critical'], default:'high'},
+    {key:'threshold', label:'Threshold (count)', default:'1'},
+    {key:'window_minutes', label:'Window (minutes)', default:'5'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/log-alerts/rules`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, type:type||'keyword', pattern:pattern||'', severity:severity||'high', threshold, window_minutes, tags:[]})
-  }).then(() => loadLogAlertsView());
+    body: JSON.stringify({name:vals.name, type:vals.type||'keyword', pattern:vals.pattern||'', severity:vals.severity||'high', threshold:parseInt(vals.threshold)||1, window_minutes:parseInt(vals.window_minutes)||5, tags:[]})
+  });
+  loadLogAlertsView();
 }
 
 
@@ -4645,21 +4742,24 @@ async function setDefaultEnv(id) {
 }
 
 async function deleteEnv(id) {
-  if (!confirm('Delete this environment?')) return;
+  if (!await pulseConfirm('Delete this environment?')) return;
   await fetch(`${API}/api/environments/${id}`, {method:'DELETE'});
   loadEnvironmentsView();
   loadEnvSwitcher();
 }
 
-function showCreateEnvModal() {
-  const name = prompt('Environment name:', 'New Environment');
-  if (!name) return;
-  const slug = prompt('Slug:', name.toLowerCase().replace(/\s+/g,'-'));
-  const region = prompt('Region:', 'us-east-1');
-  fetch(`${API}/api/environments`, {
+async function showCreateEnvModal() {
+  const vals = await pulseMultiPrompt('Create Environment', [
+    {key:'name', label:'Environment Name', placeholder:'e.g. Staging EU'},
+    {key:'slug', label:'Slug', placeholder:'e.g. staging-eu'},
+    {key:'region', label:'Region', default:'us-east-1'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/environments`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, slug:slug||name.toLowerCase(), region:region||'', color:'#6366f1'})
-  }).then(() => { loadEnvironmentsView(); loadEnvSwitcher(); });
+    body: JSON.stringify({name:vals.name, slug:vals.slug||vals.name.toLowerCase().replace(/\s+/g,'-'), region:vals.region||'', color:'#6366f1'})
+  });
+  loadEnvironmentsView(); loadEnvSwitcher();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4819,16 +4919,16 @@ async function loadTemplatesView() {
 }
 
 async function importTemplatePack(id) {
-  if (!confirm('Import all rules from this pack into your active alert rules?')) return;
+  if (!await pulseConfirm('Import all rules from this pack into your active alert rules?')) return;
   const r = await fetch(`${API}/api/alert-templates/${id}/import`, {method:'POST'}).then(r=>r.json());
-  alert(`Imported ${r.imported} rules from "${r.pack}"`);
+  showToast('info', 'Pack Imported', `Imported ${r.imported} rules from "${r.pack}"`);
   loadTemplatesView();
 }
 
 async function previewTemplatePack(id) {
   const pack = await fetch(`${API}/api/alert-templates/${id}`).then(r => r.json());
   const rules = pack.rules || [];
-  alert(rules.map(r => `${r.severity.toUpperCase()}: ${r.name}\n  ${r.description}`).join('\n\n'));
+  pulseAlert('Template Pack: ' + pack.name, rules.map(r => `<strong style="color:var(--text1)">${r.severity.toUpperCase()}</strong>: ${r.name}<br><span style="color:var(--text3)">${r.description}</span>`).join('<br><br>'));
 }
 
 
@@ -4950,7 +5050,7 @@ async function openWarRoom(id) {
 }
 
 async function addWarRoomMessage(id) {
-  const msg = prompt('Post an update to the war room:');
+  const msg = await pulsePrompt('Post an update to the war room');
   if (!msg) return;
   await fetch(`${API}/api/warroom/${id}/events`, {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -4960,7 +5060,7 @@ async function addWarRoomMessage(id) {
 }
 
 async function resolveWarRoom(id) {
-  const notes = prompt('Resolution notes:','');
+  const notes = await pulsePrompt('Resolution notes');
   await fetch(`${API}/api/warroom/${id}/resolve`, {
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({notes:notes||''})
@@ -4968,14 +5068,17 @@ async function resolveWarRoom(id) {
   loadWarRoomView();
 }
 
-function showCreateWarRoomModal() {
-  const title = prompt('Incident title:');
-  if (!title) return;
-  const severity = prompt('Severity (critical, high, medium, low):','critical');
-  fetch(`${API}/api/warroom`, {
+async function showCreateWarRoomModal() {
+  const vals = await pulseMultiPrompt('Create War Room', [
+    {key:'title', label:'Incident Title', placeholder:'e.g. Database Connection Pool Exhaustion'},
+    {key:'severity', label:'Severity', type:'select', options:['critical','high','medium','low'], default:'critical'}
+  ]);
+  if (!vals || !vals.title) return;
+  await fetch(`${API}/api/warroom`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({title, severity:severity||'critical', commander:{name:JSON.parse(localStorage.getItem('pulse_user')||'{}').name||'Admin',email:'admin@pulse.dev'}})
-  }).then(() => loadWarRoomView());
+    body: JSON.stringify({title:vals.title, severity:vals.severity||'critical', commander:{name:JSON.parse(localStorage.getItem('pulse_user')||'{}').name||'Admin',email:'admin@pulse.dev'}})
+  });
+  loadWarRoomView();
 }
 
 
@@ -5032,15 +5135,18 @@ async function changeUserRole(id, role) {
 async function deactivateUser(id) { await fetch(`${API}/api/users/${id}/deactivate`,{method:'POST'}); loadTeamMgmtView(); }
 async function reactivateUser(id) { await fetch(`${API}/api/users/${id}/reactivate`,{method:'POST'}); loadTeamMgmtView(); }
 
-function showInviteUserModal() {
-  const name = prompt('Full name:');
-  if (!name) return;
-  const email = prompt('Email:', name.toLowerCase().replace(/\s+/g,'.')+'@pulse.dev');
-  const role = prompt('Role (admin, editor, responder, viewer):', 'viewer');
-  fetch(`${API}/api/users/invite`, {
+async function showInviteUserModal() {
+  const vals = await pulseMultiPrompt('Invite User', [
+    {key:'name', label:'Full Name', placeholder:'e.g. Alex Chen'},
+    {key:'email', label:'Email', placeholder:'alex@pulse.dev'},
+    {key:'role', label:'Role', type:'select', options:['admin','editor','responder','viewer'], default:'viewer'}
+  ]);
+  if (!vals || !vals.name) return;
+  await fetch(`${API}/api/users/invite`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, email:email||'', role:role||'viewer'})
-  }).then(() => loadTeamMgmtView());
+    body: JSON.stringify({name:vals.name, email:vals.email||vals.name.toLowerCase().replace(/\s+/g,'.')+'@pulse.dev', role:vals.role||'viewer'})
+  });
+  loadTeamMgmtView();
 }
 
 
@@ -5129,7 +5235,7 @@ async function loadBillingView() {
 }
 
 async function changePlan(planId) {
-  if (!confirm(`Switch to this plan?`)) return;
+  if (!await pulseConfirm('Switch to this plan?')) return;
   await fetch(`${API}/api/billing/change-plan`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({plan_id:planId})});
   loadBillingView();
 }
