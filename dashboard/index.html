@@ -420,6 +420,8 @@ select:focus,input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--a
 .form-input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;outline:none;font-family:inherit;transition:all var(--transition)}
 .form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),0 0 12px rgba(99,102,241,0.08)}
 textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira Code',monospace}
+select.form-input{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;cursor:pointer}
+select.form-input option{background:var(--surface);color:var(--text)}
 
 /* ══════════════════════════════════════════════════════════════════════════
    TOAST NOTIFICATIONS
@@ -3028,13 +3030,22 @@ function _createModal(id, inner) {
 function pulseConfirm(message) {
   return new Promise(resolve => {
     const id = '_confirmModal';
-    const inner = `<div class="modal-title">Confirm</div>
-      <p style="color:var(--text2);line-height:1.6;margin-bottom:16px">${message}</p>
+    const inner = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <div style="width:40px;height:40px;border-radius:12px;background:rgba(239,68,68,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <i data-lucide="alert-triangle" style="width:20px;height:20px;color:#f87171"></i>
+        </div>
+        <div>
+          <div class="modal-title" style="margin-bottom:4px">Confirm Action</div>
+          <div style="color:var(--text2);font-size:13px;line-height:1.5">${message}</div>
+        </div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="_cfCancel">Cancel</button>
-        <button class="btn btn-primary" id="_cfOk">Confirm</button>
+        <button class="btn btn-danger" id="_cfOk">Confirm</button>
       </div>`;
     const ov = _createModal(id, inner);
+    if (window.lucide) lucide.createIcons({nameAttr:'data-lucide', attrs:{}, node:ov});
     ov.querySelector('#_cfCancel').onclick = () => { ov.remove(); resolve(false); };
     ov.querySelector('#_cfOk').onclick = () => { ov.remove(); resolve(true); };
   });
@@ -3043,8 +3054,11 @@ function pulseConfirm(message) {
 function pulsePrompt(label, defaultVal) {
   return new Promise(resolve => {
     const id = '_promptModal';
-    const inner = `<div class="modal-title">${label}</div>
-      <input class="input" id="_prInput" value="${defaultVal||''}" style="width:100%;margin-bottom:16px" />
+    const inner = `
+      <div class="modal-title">${label}</div>
+      <div class="form-group">
+        <input class="form-input" id="_prInput" value="${defaultVal||''}" placeholder="Type here..." />
+      </div>
       <div class="modal-actions">
         <button class="btn btn-secondary" id="_prCancel">Cancel</button>
         <button class="btn btn-primary" id="_prOk">OK</button>
@@ -3061,12 +3075,12 @@ function pulseMultiPrompt(title, fields) {
   return new Promise(resolve => {
     const id = '_multiPromptModal';
     const fieldsHtml = fields.map((f,i) => `
-      <label style="display:block;margin-bottom:12px">
-        <span style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px">${f.label}</span>
+      <div class="form-group">
+        <label class="form-label">${f.label}</label>
         ${f.type==='select'
-          ? `<select class="input" id="_mp${i}" style="width:100%">${f.options.map(o=>`<option value="${o}" ${o===f.default?'selected':''}>${o}</option>`).join('')}</select>`
-          : `<input class="input" id="_mp${i}" value="${f.default||''}" placeholder="${f.placeholder||''}" style="width:100%" />`}
-      </label>`).join('');
+          ? `<select class="form-input" id="_mp${i}">${f.options.map(o=>`<option value="${o}" ${o===f.default?'selected':''}>${o}</option>`).join('')}</select>`
+          : `<input class="form-input" id="_mp${i}" value="${f.default||''}" placeholder="${f.placeholder||''}" />`}
+      </div>`).join('');
     const inner = `<div class="modal-title">${title}</div>${fieldsHtml}
       <div class="modal-actions">
         <button class="btn btn-secondary" id="_mpCancel">Cancel</button>
@@ -3078,14 +3092,19 @@ function pulseMultiPrompt(title, fields) {
       const vals = {}; fields.forEach((f,i) => { vals[f.key] = document.getElementById(`_mp${i}`).value; });
       ov.remove(); resolve(vals);
     };
+    const firstInput = ov.querySelector('#_mp0');
+    if (firstInput) firstInput.addEventListener('keydown', e => {
+      if (e.key==='Enter') ov.querySelector('#_mpOk').click();
+    });
   });
 }
 
 function pulseAlert(title, message) {
   const id = '_alertModal';
-  const inner = `<div class="modal-title">${title}</div>
-    <div style="color:var(--text2);line-height:1.6;margin-bottom:16px;white-space:pre-wrap;max-height:60vh;overflow-y:auto;font-size:13px">${message}</div>
-    <div class="modal-actions">
+  const inner = `
+    <div class="modal-title">${title}</div>
+    <div style="color:var(--text2);line-height:1.7;max-height:60vh;overflow-y:auto;font-size:13px;padding:16px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border)">${message}</div>
+    <div class="modal-actions" style="margin-top:16px">
       <button class="btn btn-primary" id="_alOk">OK</button>
     </div>`;
   const ov = _createModal(id, inner);
