@@ -555,8 +555,14 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
       <i data-lucide="zap"></i><span class="sb-item-label">Incidents</span>
       <span class="sb-badge warn" id="sbIncidentBadge" style="display:none">0</span>
     </div>
+    <div class="sb-item" onclick="showView('warroom')">
+      <i data-lucide="radio-tower"></i><span class="sb-item-label">War Room</span>
+    </div>
     <div class="sb-item" onclick="showView('log-alerts')">
       <i data-lucide="scroll-text"></i><span class="sb-item-label">Log Alerts</span>
+    </div>
+    <div class="sb-item" onclick="showView('templates')">
+      <i data-lucide="package"></i><span class="sb-item-label">Alert Templates</span>
     </div>
 
     <div class="sb-section">Observe</div>
@@ -575,6 +581,9 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
     </div>
     <div class="sb-item" onclick="showView('apm')">
       <i data-lucide="git-branch"></i><span class="sb-item-label">APM / Traces</span>
+    </div>
+    <div class="sb-item" onclick="showView('explorer')">
+      <i data-lucide="search"></i><span class="sb-item-label">Metric Explorer</span>
     </div>
 
     <div class="sb-section">Reliability</div>
@@ -616,6 +625,12 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
     </div>
 
     <div class="sb-section">Admin</div>
+    <div class="sb-item" onclick="showView('team-mgmt')">
+      <i data-lucide="users"></i><span class="sb-item-label">Users & Teams</span>
+    </div>
+    <div class="sb-item" onclick="showView('billing')">
+      <i data-lucide="credit-card"></i><span class="sb-item-label">Usage & Billing</span>
+    </div>
     <div class="sb-item" onclick="showView('audit')">
       <i data-lucide="clipboard-list"></i><span class="sb-item-label">Audit Log</span>
     </div>
@@ -1460,6 +1475,122 @@ textarea.form-input{resize:vertical;min-height:80px;font-family:'SF Mono','Fira 
       <div class="grid2 col-2" id="envGrid" style="margin-top:18px"><div class="loading">Loading environments</div></div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════════
+         METRIC EXPLORER VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-explorer">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Metric Explorer</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Query, visualize, and analyze any metric across your infrastructure</div>
+        </div>
+      </div>
+      <!-- Query Builder -->
+      <div class="panel" style="margin-bottom:18px">
+        <div style="padding:18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);display:block;margin-bottom:4px">Metric</label>
+            <select id="expMetric" onchange="runExplorerQuery()" style="font-size:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);min-width:200px"></select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);display:block;margin-bottom:4px">Function</label>
+            <select id="expFunc" onchange="runExplorerQuery()" style="font-size:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)"></select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);display:block;margin-bottom:4px">Time Range</label>
+            <select id="expRange" onchange="runExplorerQuery()" style="font-size:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)"></select>
+          </div>
+          <div>
+            <label style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);display:block;margin-bottom:4px">Group By</label>
+            <select id="expGroup" onchange="runExplorerQuery()" style="font-size:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text)">
+              <option value="">None (aggregate)</option>
+              <option value="node">Node</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <!-- Stats -->
+      <div class="grid2 col-4" id="expStats"></div>
+      <!-- Chart -->
+      <div class="panel" style="margin-top:18px">
+        <div style="padding:18px">
+          <canvas id="expChart" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         ALERT TEMPLATES VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-templates">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Alert Templates Library</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Pre-built alert rule packs — one-click import for instant monitoring</div>
+        </div>
+      </div>
+      <div class="grid2 col-4" id="tplSummary"></div>
+      <div class="grid2 col-2" id="tplPacks" style="margin-top:18px"><div class="loading">Loading template packs</div></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         WAR ROOM VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-warroom">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Incident War Room</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Real-time collaborative incident response with unified timeline</div>
+        </div>
+        <button class="btn btn-primary" onclick="showCreateWarRoomModal()"><i data-lucide="plus" style="width:14px;height:14px;margin-right:4px"></i> New War Room</button>
+      </div>
+      <div class="grid2 col-4" id="wrSummary"></div>
+      <!-- War Room list or detail -->
+      <div id="wrList" style="margin-top:18px"><div class="loading">Loading war rooms</div></div>
+      <div id="wrDetail" style="display:none;margin-top:18px"></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         USER & TEAM MANAGEMENT VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-team-mgmt">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Users & Teams</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Manage users, roles, and team assignments</div>
+        </div>
+        <button class="btn btn-primary" onclick="showInviteUserModal()"><i data-lucide="user-plus" style="width:14px;height:14px;margin-right:4px"></i> Invite User</button>
+      </div>
+      <div class="grid2 col-4" id="tmSummary"></div>
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="users"></i> All Users</div></div>
+        <div id="tmUserList" style="padding:0"><div class="loading">Loading users</div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════════
+         BILLING & USAGE VIEW
+         ══════════════════════════════════════════════════════════════════ -->
+    <div class="view" id="view-billing">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div>
+          <div style="font-size:18px;font-weight:800">Usage & Billing</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Track resource consumption and manage your plan</div>
+        </div>
+      </div>
+      <!-- Current plan banner -->
+      <div id="billPlanBanner" class="panel" style="margin-bottom:18px"></div>
+      <!-- Usage meters -->
+      <div class="grid2 col-3" id="billUsageMeters"></div>
+      <!-- Daily usage chart -->
+      <div class="panel" style="margin-top:18px">
+        <div class="ph"><div class="ph-title"><i data-lucide="bar-chart-3"></i> Daily Usage (30 days)</div></div>
+        <div style="padding:18px"><canvas id="billChart" height="250"></canvas></div>
+      </div>
+      <!-- Plans comparison -->
+      <div class="grid2 col-3" id="billPlans" style="margin-top:18px"></div>
+    </div>
+
   </div><!-- #content -->
 </div><!-- #main -->
 
@@ -1727,7 +1858,9 @@ const viewTitles = {
   predictions:'Predictive Forecasts', ask:'Ask PULSE', reports:'Reports',
   settings:'Settings', 'custom-dash':'Custom Dashboards', oncall:'On-Call',
   statuspage:'Status Page', catalog:'Service Catalog', workflows:'Workflows',
-  'log-alerts':'Log Alerts', apm:'APM / Traces', audit:'Audit Log', environments:'Environments'
+  'log-alerts':'Log Alerts', apm:'APM / Traces', audit:'Audit Log', environments:'Environments',
+  explorer:'Metric Explorer', templates:'Alert Templates', warroom:'War Room',
+  'team-mgmt':'Users & Teams', billing:'Usage & Billing'
 };
 
 function showView(name) {
@@ -1758,6 +1891,11 @@ function showView(name) {
   if (name === 'workflows')   loadWorkflowsView();
   if (name === 'log-alerts')  loadLogAlertsView();
   if (name === 'apm')         loadApmView();
+  if (name === 'explorer')    loadExplorerView();
+  if (name === 'templates')   loadTemplatesView();
+  if (name === 'warroom')     loadWarRoomView();
+  if (name === 'team-mgmt')   loadTeamMgmtView();
+  if (name === 'billing')     loadBillingView();
   if (name === 'audit')       loadAuditView();
   if (name === 'environments') loadEnvironmentsView();
   if (name === 'settings')    loadSettingsView();
@@ -4556,6 +4694,445 @@ function connectWebSocket() {
 
 // Connect WebSocket on startup
 setTimeout(connectWebSocket, 2000);
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// METRIC EXPLORER
+// ══════════════════════════════════════════════════════════════════════════════
+let _expChart = null;
+let _expConfigLoaded = false;
+
+async function loadExplorerView() {
+  if (!_expConfigLoaded) {
+    const cfg = await fetch(`${API}/api/explorer/config`).then(r => r.json());
+    const metSel = document.getElementById('expMetric');
+    const funcSel = document.getElementById('expFunc');
+    const rangeSel = document.getElementById('expRange');
+    let lastGroup = '';
+    cfg.metrics.forEach(m => {
+      if (m.group !== lastGroup) {
+        const og = document.createElement('optgroup');
+        og.label = m.group;
+        metSel.appendChild(og);
+        lastGroup = m.group;
+      }
+      const o = document.createElement('option');
+      o.value = m.id; o.textContent = `${m.name} (${m.unit||'—'})`;
+      (metSel.lastElementChild.tagName === 'OPTGROUP' ? metSel.lastElementChild : metSel).appendChild(o);
+    });
+    cfg.functions.forEach(f => { const o = document.createElement('option'); o.value = f.id; o.textContent = f.name; funcSel.appendChild(o); });
+    cfg.time_ranges.forEach(t => { const o = document.createElement('option'); o.value = t.id; o.textContent = t.name; if(t.id==='1h') o.selected=true; rangeSel.appendChild(o); });
+    _expConfigLoaded = true;
+  }
+  runExplorerQuery();
+}
+
+async function runExplorerQuery() {
+  const metric = document.getElementById('expMetric')?.value || 'cpu_percent';
+  const func = document.getElementById('expFunc')?.value || 'avg';
+  const range = document.getElementById('expRange')?.value || '1h';
+  const group = document.getElementById('expGroup')?.value || '';
+
+  const data = await fetch(`${API}/api/explorer/query?metric=${metric}&func=${func}&time_range=${range}${group?'&group_by='+group:''}`).then(r => r.json());
+
+  // Stats
+  const stats = data.stats || {};
+  const firstKey = Object.keys(stats)[0] || 'all';
+  const s = stats[firstKey] || {};
+  document.getElementById('expStats').innerHTML = [
+    {label:'Current', val:s.current, color:'var(--accent2)'},
+    {label:'Average', val:s.avg, color:'var(--green)'},
+    {label:'Maximum', val:s.max, color:'var(--red)'},
+    {label:'Minimum', val:s.min, color:'var(--cyan)'},
+  ].map(c => `<div class="panel" style="padding:16px 18px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${c.label}</div>
+    <div style="font-size:28px;font-weight:900;color:${c.color};margin-top:6px">${c.val}${data.metric?.unit ? ' '+data.metric.unit : ''}</div>
+  </div>`).join('');
+
+  // Chart
+  const ctx = document.getElementById('expChart').getContext('2d');
+  if (_expChart) _expChart.destroy();
+  const series = data.series || {};
+  const colors = ['#6366f1','#34d399','#f87171','#fbbf24','#22d3ee','#a78bfa','#fb923c'];
+  const datasets = Object.entries(series).map(([key, pts], i) => ({
+    label: key, data: pts.map(p => p.value),
+    borderColor: colors[i % colors.length], backgroundColor: colors[i % colors.length] + '20',
+    fill: Object.keys(series).length === 1, tension: 0.3, pointRadius: 0, borderWidth: 2,
+  }));
+  const labels = (series[Object.keys(series)[0]] || []).map(p => {
+    const d = new Date(p.ts);
+    return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  });
+  _expChart = new Chart(ctx, {
+    type: 'line', data: { labels, datasets },
+    options: { responsive: true, plugins: { legend: { display: Object.keys(series).length > 1, labels:{color:'#a1a1aa'} } },
+      scales: { x:{ticks:{color:'#71717a',maxTicksLimit:12},grid:{color:'#27272a'}}, y:{ticks:{color:'#71717a'},grid:{color:'#27272a'}} } }
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ALERT TEMPLATES
+// ══════════════════════════════════════════════════════════════════════════════
+
+async function loadTemplatesView() {
+  const [packs, summary] = await Promise.all([
+    fetch(`${API}/api/alert-templates`).then(r => r.json()),
+    fetch(`${API}/api/alert-templates/summary`).then(r => r.json()),
+  ]);
+
+  document.getElementById('tplSummary').innerHTML = [
+    {label:'Template Packs', val:summary.total_packs, color:'var(--accent2)'},
+    {label:'Total Rules', val:summary.total_rules, color:'var(--cyan)'},
+    {label:'Imported', val:summary.imported_rules, color:'var(--green)'},
+    {label:'Categories', val:summary.categories?.length||0, color:'var(--purple)'},
+  ].map(s => `<div class="panel" style="padding:16px 18px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+    <div style="font-size:28px;font-weight:900;color:${s.color};margin-top:6px">${s.val}</div>
+  </div>`).join('');
+
+  document.getElementById('tplPacks').innerHTML = packs.map(p => `
+    <div class="panel">
+      <div style="padding:20px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div style="width:44px;height:44px;border-radius:var(--radius);background:${p.color}15;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i data-lucide="${p.icon||'package'}" style="width:22px;height:22px;color:${p.color}"></i>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:16px;font-weight:800">${p.name}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:4px">${p.description||''}</div>
+          </div>
+          <span class="badge" style="background:${p.color}15;color:${p.color};border:1px solid ${p.color}30">${p.category}</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:16px;font-size:12px;color:var(--text3)">
+          <span><strong>${p.rule_count}</strong> rules</span>
+          <span>Imported <strong>${p.imported_count||0}</strong>x</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn btn-primary" style="font-size:12px" onclick="importTemplatePack('${p.id}')"><i data-lucide="download" style="width:14px;height:14px;margin-right:4px"></i> Import All Rules</button>
+          <button class="btn btn-secondary" style="font-size:12px" onclick="previewTemplatePack('${p.id}')">Preview</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+async function importTemplatePack(id) {
+  if (!confirm('Import all rules from this pack into your active alert rules?')) return;
+  const r = await fetch(`${API}/api/alert-templates/${id}/import`, {method:'POST'}).then(r=>r.json());
+  alert(`Imported ${r.imported} rules from "${r.pack}"`);
+  loadTemplatesView();
+}
+
+async function previewTemplatePack(id) {
+  const pack = await fetch(`${API}/api/alert-templates/${id}`).then(r => r.json());
+  const rules = pack.rules || [];
+  alert(rules.map(r => `${r.severity.toUpperCase()}: ${r.name}\n  ${r.description}`).join('\n\n'));
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WAR ROOM
+// ══════════════════════════════════════════════════════════════════════════════
+
+const wrEvtIcons = {alert:'bell',metric_spike:'trending-up',log_pattern:'scroll-text',responder_action:'user',status_change:'flag',communication:'message-circle',runbook_step:'play',deployment:'rocket',rca_update:'brain',escalation:'arrow-up-circle'};
+const wrEvtColors = {alert:'var(--red)',metric_spike:'var(--yellow)',log_pattern:'var(--purple)',responder_action:'var(--accent2)',status_change:'var(--cyan)',communication:'var(--text3)',runbook_step:'var(--green)',deployment:'var(--accent)',rca_update:'var(--orange,var(--yellow))',escalation:'var(--red)'};
+
+async function loadWarRoomView() {
+  const [rooms, summary] = await Promise.all([
+    fetch(`${API}/api/warroom`).then(r => r.json()),
+    fetch(`${API}/api/warroom/summary`).then(r => r.json()),
+  ]);
+
+  document.getElementById('wrSummary').innerHTML = [
+    {label:'Total', val:summary.total, color:'var(--accent2)'},
+    {label:'Active', val:summary.active, color:'var(--red)'},
+    {label:'Resolved', val:summary.resolved, color:'var(--green)'},
+    {label:'Events', val:summary.total_events, color:'var(--cyan)'},
+  ].map(s => `<div class="panel" style="padding:16px 18px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+    <div style="font-size:28px;font-weight:900;color:${s.color};margin-top:6px">${s.val}</div>
+  </div>`).join('');
+
+  document.getElementById('wrDetail').style.display = 'none';
+  const el = document.getElementById('wrList');
+  el.style.display = 'block';
+  el.innerHTML = rooms.map(r => {
+    const sc = r.status==='active' ? 'var(--red)' : 'var(--green)';
+    return `<div class="panel" style="margin-bottom:12px;cursor:pointer" onclick="openWarRoom('${r.id}')">
+      <div style="padding:18px;display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:10px;height:10px;border-radius:50%;background:${sc};box-shadow:0 0 8px ${sc}50${r.status==='active'?';animation:pulse 2s infinite':''}"></div>
+            <span style="font-size:16px;font-weight:800">${r.title}</span>
+            <span class="badge ${r.status==='active'?'open':'resolved'}">${r.status}</span>
+            <span class="badge" style="background:var(--red)15;color:var(--red)">${r.severity}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px">
+            Commander: <strong>${r.commander?.name||'—'}</strong> | Responders: ${r.responders?.length||0} | Events: ${r.event_count||0}
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">
+            Started: ${timeAgo(r.started_at)} ${r.resolved_at ? '| Resolved: '+timeAgo(r.resolved_at) : ''}
+          </div>
+        </div>
+        <i data-lucide="chevron-right" style="width:20px;height:20px;color:var(--text3)"></i>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No war rooms. Create one when an incident needs coordinated response.</div>';
+  if (window.lucide) lucide.createIcons();
+}
+
+async function openWarRoom(id) {
+  const room = await fetch(`${API}/api/warroom/${id}`).then(r => r.json());
+  document.getElementById('wrList').style.display = 'none';
+  const detail = document.getElementById('wrDetail');
+  detail.style.display = 'block';
+
+  const timeline = room.timeline || [];
+  detail.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <button class="btn btn-secondary" onclick="document.getElementById('wrDetail').style.display='none';document.getElementById('wrList').style.display='block'"><i data-lucide="arrow-left" style="width:14px;height:14px;margin-right:4px"></i> Back</button>
+      <div style="display:flex;gap:8px">
+        ${room.status==='active'?`<button class="btn btn-primary" onclick="addWarRoomMessage('${id}')">Post Update</button><button class="btn btn-danger" onclick="resolveWarRoom('${id}')">Resolve</button>`:''}
+      </div>
+    </div>
+    <!-- Header -->
+    <div class="panel" style="margin-bottom:18px">
+      <div style="padding:20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <span style="font-size:20px;font-weight:900">${room.title}</span>
+          <span class="badge ${room.status==='active'?'open':'resolved'}">${room.status}</span>
+        </div>
+        <div style="display:flex;gap:20px;font-size:12px;color:var(--text3);flex-wrap:wrap">
+          <span>Commander: <strong style="color:var(--text)">${room.commander?.name||'—'}</strong></span>
+          <span>Severity: <strong style="color:var(--red)">${room.severity}</strong></span>
+          <span>Services: ${(room.affected_services||[]).join(', ')}</span>
+        </div>
+        <!-- Responders -->
+        <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap">
+          ${(room.responders||[]).map(r => `
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;background:var(--glass);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:11px">
+              <div style="width:20px;height:20px;border-radius:5px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff">${(r.name||'?')[0]}</div>
+              <span>${r.name}</span><span style="color:var(--text3)">${r.role}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+    <!-- Timeline -->
+    <div class="panel">
+      <div class="ph"><div class="ph-title"><i data-lucide="clock"></i> Timeline (${timeline.length} events)</div></div>
+      <div style="padding:0 18px 18px">
+        ${timeline.map(e => {
+          const ec = wrEvtColors[e.type] || 'var(--text3)';
+          return `<div style="display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0">
+              <div style="width:32px;height:32px;border-radius:var(--radius-sm);background:${ec}15;display:flex;align-items:center;justify-content:center">
+                <i data-lucide="${wrEvtIcons[e.type]||'activity'}" style="width:15px;height:15px;color:${ec}"></i>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:13px;font-weight:700">${e.title}</span>
+                <span class="badge" style="font-size:9px;background:${ec}15;color:${ec}">${e.type.replace(/_/g,' ')}</span>
+              </div>
+              ${e.detail?`<div style="font-size:12px;color:var(--text2);margin-top:4px;line-height:1.6">${e.detail}</div>`:''}
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">${e.actor||'system'} · ${timeAgo(e.ts)}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    ${room.notes?`<div class="panel" style="margin-top:18px"><div style="padding:18px"><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text3)">NOTES</div><div style="font-size:13px;line-height:1.7">${room.notes}</div></div></div>`:''}
+  `;
+  if (window.lucide) lucide.createIcons();
+}
+
+async function addWarRoomMessage(id) {
+  const msg = prompt('Post an update to the war room:');
+  if (!msg) return;
+  await fetch(`${API}/api/warroom/${id}/events`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({type:'communication', title:msg, actor:JSON.parse(localStorage.getItem('pulse_user')||'{}').name||'User'})
+  });
+  openWarRoom(id);
+}
+
+async function resolveWarRoom(id) {
+  const notes = prompt('Resolution notes:','');
+  await fetch(`${API}/api/warroom/${id}/resolve`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({notes:notes||''})
+  });
+  loadWarRoomView();
+}
+
+function showCreateWarRoomModal() {
+  const title = prompt('Incident title:');
+  if (!title) return;
+  const severity = prompt('Severity (critical, high, medium, low):','critical');
+  fetch(`${API}/api/warroom`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({title, severity:severity||'critical', commander:{name:JSON.parse(localStorage.getItem('pulse_user')||'{}').name||'Admin',email:'admin@pulse.dev'}})
+  }).then(() => loadWarRoomView());
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// USER & TEAM MANAGEMENT
+// ══════════════════════════════════════════════════════════════════════════════
+
+const roleColors = {admin:'var(--red)',editor:'var(--yellow)',viewer:'var(--green)',responder:'var(--accent2)'};
+const statusColors2 = {active:'var(--green)',invited:'var(--cyan)',inactive:'var(--text3)'};
+
+async function loadTeamMgmtView() {
+  const [users, summary] = await Promise.all([
+    fetch(`${API}/api/users`).then(r => r.json()),
+    fetch(`${API}/api/users/summary`).then(r => r.json()),
+  ]);
+
+  document.getElementById('tmSummary').innerHTML = [
+    {label:'Total Users', val:summary.total_users, color:'var(--accent2)'},
+    {label:'Active', val:summary.active, color:'var(--green)'},
+    {label:'Invited', val:summary.invited, color:'var(--cyan)'},
+    {label:'Inactive', val:summary.inactive, color:'var(--text3)'},
+  ].map(s => `<div class="panel" style="padding:16px 18px">
+    <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">${s.label}</div>
+    <div style="font-size:28px;font-weight:900;color:${s.color};margin-top:6px">${s.val}</div>
+  </div>`).join('');
+
+  document.getElementById('tmUserList').innerHTML = users.map(u => {
+    const rc = roleColors[u.role]||'var(--text3)';
+    const sc = statusColors2[u.status]||'var(--text3)';
+    return `<div style="display:flex;align-items:center;gap:14px;padding:14px 18px;border-bottom:1px solid var(--border);transition:background .15s" onmouseover="this.style.background='var(--glass)'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:var(--radius-sm);background:${u.avatar_color||'var(--accent)'}20;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:${u.avatar_color||'var(--accent)'}">${(u.name||u.email||'?')[0].toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${u.name||'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">${u.email}</div>
+      </div>
+      <span class="badge" style="background:${rc}15;color:${rc};border:1px solid ${rc}30;font-size:10px">${u.role}</span>
+      <span class="badge" style="background:${sc}15;color:${sc};font-size:10px">${u.status}</span>
+      <div style="display:flex;gap:4px">
+        <select onchange="changeUserRole('${u.id}',this.value)" style="font-size:10px;padding:3px 6px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text)">
+          ${['admin','editor','responder','viewer'].map(r => `<option value="${r}" ${r===u.role?'selected':''}>${r}</option>`).join('')}
+        </select>
+        ${u.status==='active'?`<button class="btn btn-danger" style="font-size:10px;padding:3px 8px" onclick="deactivateUser('${u.id}')">Deactivate</button>`:''}
+        ${u.status==='inactive'?`<button class="btn btn-secondary" style="font-size:10px;padding:3px 8px" onclick="reactivateUser('${u.id}')">Reactivate</button>`:''}
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty">No users</div>';
+  if (window.lucide) lucide.createIcons();
+}
+
+async function changeUserRole(id, role) {
+  await fetch(`${API}/api/users/${id}/role`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({role})});
+  loadTeamMgmtView();
+}
+async function deactivateUser(id) { await fetch(`${API}/api/users/${id}/deactivate`,{method:'POST'}); loadTeamMgmtView(); }
+async function reactivateUser(id) { await fetch(`${API}/api/users/${id}/reactivate`,{method:'POST'}); loadTeamMgmtView(); }
+
+function showInviteUserModal() {
+  const name = prompt('Full name:');
+  if (!name) return;
+  const email = prompt('Email:', name.toLowerCase().replace(/\s+/g,'.')+'@pulse.dev');
+  const role = prompt('Role (admin, editor, responder, viewer):', 'viewer');
+  fetch(`${API}/api/users/invite`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, email:email||'', role:role||'viewer'})
+  }).then(() => loadTeamMgmtView());
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BILLING & USAGE
+// ══════════════════════════════════════════════════════════════════════════════
+let _billChart = null;
+
+async function loadBillingView() {
+  const [usage, plans, daily] = await Promise.all([
+    fetch(`${API}/api/billing/usage`).then(r => r.json()),
+    fetch(`${API}/api/billing/plans`).then(r => r.json()),
+    fetch(`${API}/api/billing/usage/daily`).then(r => r.json()),
+  ]);
+
+  // Plan banner
+  document.getElementById('billPlanBanner').innerHTML = `
+    <div style="padding:20px;display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,rgba(99,102,241,0.08),rgba(139,92,246,0.08))">
+      <div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text3)">Current Plan</div>
+        <div style="font-size:28px;font-weight:900;color:var(--accent2);margin-top:4px">${usage.plan}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">$${usage.price}/mo · ${usage.retention_days}-day retention · ${usage.period_start} to ${usage.period_end}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:12px;color:var(--text3)">Users: <strong>${usage.users_used}/${usage.users_limit}</strong></div>
+        <div style="font-size:12px;color:var(--text3)">Alerts: <strong>${usage.alerts_used}/${usage.alerts_limit}</strong></div>
+        <div style="font-size:12px;color:var(--text3)">Dashboards: <strong>${usage.dashboards_used}/${usage.dashboards_limit}</strong></div>
+      </div>
+    </div>`;
+
+  // Usage meters
+  const u = usage.usage;
+  document.getElementById('billUsageMeters').innerHTML = Object.entries(u).map(([key, m]) => {
+    const pct = m.percent;
+    const barColor = pct > 80 ? 'var(--red)' : pct > 60 ? 'var(--yellow)' : 'var(--green)';
+    const label = key.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    const usedStr = m.used > 1000000 ? (m.used/1000000).toFixed(1)+'M' : m.used > 1000 ? (m.used/1000).toFixed(1)+'K' : m.used;
+    const limitStr = m.limit > 1000000 ? (m.limit/1000000).toFixed(0)+'M' : m.limit > 1000 ? (m.limit/1000).toFixed(0)+'K' : m.limit;
+    return `<div class="panel" style="padding:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:700">${label}</span>
+        <span style="font-size:11px;color:var(--text3)">${usedStr} / ${limitStr}</span>
+      </div>
+      <div style="height:8px;background:var(--glass);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:4px;transition:width .5s"></div>
+      </div>
+      <div style="font-size:10px;color:${barColor};margin-top:4px;font-weight:600">${pct}% used</div>
+    </div>`;
+  }).join('');
+
+  // Daily chart
+  const ctx = document.getElementById('billChart').getContext('2d');
+  if (_billChart) _billChart.destroy();
+  _billChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: daily.map(d => d.date.slice(5)),
+      datasets: [
+        {label:'Metrics', data:daily.map(d => d.metrics/1000), backgroundColor:'#6366f180', borderRadius:3},
+        {label:'Logs', data:daily.map(d => d.logs/1000), backgroundColor:'#34d39980', borderRadius:3},
+        {label:'API Calls', data:daily.map(d => d.api_calls/1000), backgroundColor:'#fbbf2480', borderRadius:3},
+      ]
+    },
+    options: {responsive:true, plugins:{legend:{labels:{color:'#a1a1aa'}}},
+      scales: {x:{stacked:true,ticks:{color:'#71717a'},grid:{color:'#27272a'}},
+               y:{stacked:true,ticks:{color:'#71717a',callback:v=>v+'K'},grid:{color:'#27272a'}}}}
+  });
+
+  // Plans
+  document.getElementById('billPlans').innerHTML = plans.map(p => `
+    <div class="panel" style="${p.is_current?'border-color:var(--accent);box-shadow:0 0 20px rgba(99,102,241,0.1)':''}">
+      <div style="padding:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:18px;font-weight:900">${p.name}</div>
+          ${p.is_current?'<span class="badge open">Current</span>':''}
+        </div>
+        <div style="font-size:32px;font-weight:900;color:var(--accent2)">$${p.price}<span style="font-size:14px;color:var(--text3);font-weight:500">/mo</span></div>
+        <ul style="list-style:none;padding:0;margin:14px 0 0">
+          ${(p.features||[]).map(f => `<li style="font-size:12px;color:var(--text2);padding:4px 0;display:flex;align-items:center;gap:6px"><i data-lucide="check" style="width:14px;height:14px;color:var(--green)"></i>${f}</li>`).join('')}
+        </ul>
+        ${!p.is_current?`<button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="changePlan('${p.id}')">Switch to ${p.name}</button>`:''}
+      </div>
+    </div>
+  `).join('');
+  if (window.lucide) lucide.createIcons();
+}
+
+async function changePlan(planId) {
+  if (!confirm(`Switch to this plan?`)) return;
+  await fetch(`${API}/api/billing/change-plan`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({plan_id:planId})});
+  loadBillingView();
+}
 
 </script>
 </body>

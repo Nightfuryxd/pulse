@@ -60,8 +60,13 @@ import logalerts as logalert_mod
 import apm as apm_mod
 import environments as env_mod
 import auditlog as audit_mod
+import metricexplorer as mexplorer_mod
+import alerttemplates as atpl_mod
+import warroom as warroom_mod
+import usermgmt as usermgmt_mod
+import billing as billing_mod
 
-app = FastAPI(title="PULSE", version="5.0.0", description="AI-powered unified infrastructure intelligence")
+app = FastAPI(title="PULSE", version="6.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.middleware("http")(rbac_middleware)
 app.middleware("http")(auth_middleware)
@@ -1968,6 +1973,204 @@ async def api_audit_entry(entry_id: str):
     if not e:
         raise HTTPException(404, "Entry not found")
     return e
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# METRIC EXPLORER
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/explorer/config")
+async def api_explorer_config():
+    return mexplorer_mod.get_explorer_config()
+
+@app.get("/api/explorer/query")
+async def api_explorer_query(metric: str, time_range: str = "1h", func: str = "avg",
+                              group_by: str | None = None):
+    return mexplorer_mod.query(metric, time_range, func, group_by)
+
+@app.get("/api/explorer/metrics")
+async def api_explorer_metrics():
+    return mexplorer_mod.get_available_metrics()
+
+@app.get("/api/explorer/functions")
+async def api_explorer_functions():
+    return mexplorer_mod.get_available_functions()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ALERT TEMPLATES
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/alert-templates")
+async def api_list_alert_templates(category: str | None = None):
+    return atpl_mod.list_packs(category)
+
+@app.get("/api/alert-templates/summary")
+async def api_alert_templates_summary():
+    return atpl_mod.get_summary()
+
+@app.get("/api/alert-templates/{pack_id}")
+async def api_get_alert_template(pack_id: str):
+    p = atpl_mod.get_pack(pack_id)
+    if not p:
+        raise HTTPException(404, "Pack not found")
+    return p
+
+@app.post("/api/alert-templates/{pack_id}/import")
+async def api_import_alert_template(pack_id: str):
+    result = atpl_mod.import_pack(pack_id)
+    if "error" in result:
+        raise HTTPException(404, result["error"])
+    return result
+
+@app.get("/api/alert-templates/imported/rules")
+async def api_imported_rules():
+    return atpl_mod.get_imported_rules()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# WAR ROOM / INCIDENT TIMELINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/warroom")
+async def api_list_war_rooms(status: str | None = None):
+    return warroom_mod.list_war_rooms(status)
+
+@app.get("/api/warroom/summary")
+async def api_warroom_summary():
+    return warroom_mod.get_summary()
+
+@app.get("/api/warroom/{room_id}")
+async def api_get_war_room(room_id: str):
+    r = warroom_mod.get_war_room(room_id)
+    if not r:
+        raise HTTPException(404, "War room not found")
+    return r
+
+@app.post("/api/warroom")
+async def api_create_war_room(request: Request):
+    body = await request.json()
+    return warroom_mod.create_war_room(body)
+
+@app.post("/api/warroom/{room_id}/events")
+async def api_add_warroom_event(room_id: str, request: Request):
+    body = await request.json()
+    evt = warroom_mod.add_timeline_event(room_id, body)
+    if not evt:
+        raise HTTPException(404, "War room not found")
+    return evt
+
+@app.post("/api/warroom/{room_id}/resolve")
+async def api_resolve_warroom(room_id: str, request: Request):
+    body = await request.json()
+    r = warroom_mod.resolve_war_room(room_id, body.get("notes", ""))
+    if not r:
+        raise HTTPException(404, "War room not found")
+    return r
+
+@app.post("/api/warroom/{room_id}/responders")
+async def api_add_warroom_responder(room_id: str, request: Request):
+    body = await request.json()
+    resp = warroom_mod.add_responder(room_id, body)
+    if not resp:
+        raise HTTPException(404, "War room not found")
+    return resp
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# USER & TEAM MANAGEMENT
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/users")
+async def api_list_users(role: str | None = None, status: str | None = None):
+    return usermgmt_mod.list_users(role, status)
+
+@app.get("/api/users/summary")
+async def api_users_summary():
+    return usermgmt_mod.get_summary()
+
+@app.get("/api/users/roles")
+async def api_user_roles():
+    return usermgmt_mod.get_roles()
+
+@app.get("/api/users/invites")
+async def api_user_invites():
+    return usermgmt_mod.get_invites()
+
+@app.get("/api/users/{user_id}")
+async def api_get_managed_user(user_id: str):
+    u = usermgmt_mod.get_user(user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    return u
+
+@app.post("/api/users/invite")
+async def api_invite_user(request: Request):
+    body = await request.json()
+    return usermgmt_mod.invite_user(body)
+
+@app.put("/api/users/{user_id}")
+async def api_update_managed_user(user_id: str, request: Request):
+    body = await request.json()
+    u = usermgmt_mod.update_user(user_id, body)
+    if not u:
+        raise HTTPException(404, "User not found")
+    return u
+
+@app.post("/api/users/{user_id}/deactivate")
+async def api_deactivate_user(user_id: str):
+    u = usermgmt_mod.deactivate_user(user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    return u
+
+@app.post("/api/users/{user_id}/reactivate")
+async def api_reactivate_user(user_id: str):
+    u = usermgmt_mod.reactivate_user(user_id)
+    if not u:
+        raise HTTPException(404, "User not found")
+    return u
+
+@app.post("/api/users/{user_id}/role")
+async def api_change_user_role(user_id: str, request: Request):
+    body = await request.json()
+    u = usermgmt_mod.change_role(user_id, body.get("role", "viewer"))
+    if not u:
+        raise HTTPException(404, "User not found or invalid role")
+    return u
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BILLING & USAGE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/billing/plan")
+async def api_current_plan():
+    return billing_mod.get_current_plan()
+
+@app.get("/api/billing/plans")
+async def api_all_plans():
+    return billing_mod.get_plans()
+
+@app.get("/api/billing/usage")
+async def api_usage_summary():
+    return billing_mod.get_usage_summary()
+
+@app.get("/api/billing/usage/daily")
+async def api_daily_usage(days: int = 30):
+    return billing_mod.get_daily_usage(days)
+
+@app.get("/api/billing/usage/breakdown")
+async def api_usage_breakdown():
+    return billing_mod.get_usage_breakdown()
+
+@app.post("/api/billing/change-plan")
+async def api_change_plan(request: Request):
+    body = await request.json()
+    result = billing_mod.change_plan(body.get("plan_id", ""))
+    if not result:
+        raise HTTPException(400, "Invalid plan")
+    return result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
