@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, Sun, Moon, ChevronDown, LogOut } from 'lucide-react';
+import { Bell, Sun, Moon, ChevronDown, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 
-export default function Topbar() {
+export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   return (
-    <header className="fixed top-0 left-[220px] right-0 h-14 bg-[var(--surface)] border-b border-[var(--border-color)] flex items-center justify-between px-6 z-30">
-      {/* Left — page context */}
+    <header className="fixed top-0 left-0 lg:left-[220px] right-0 h-14 bg-[var(--surface)] border-b border-[var(--border-color)] flex items-center justify-between px-4 md:px-6 z-30">
+      {/* Left — hamburger + page context */}
       <div className="flex items-center gap-3">
+        <button onClick={onMenuClick} className="lg:hidden w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text3)] hover:bg-[var(--surface2)]">
+          <Menu className="w-5 h-5" />
+        </button>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface2)] border border-[var(--border-color)]">
           <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
           <span className="text-xs font-semibold text-[var(--text2)]">Production</span>
