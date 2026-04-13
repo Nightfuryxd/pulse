@@ -61,7 +61,7 @@ PULSE Platform
 │   ├── Environments               — Multi-env support (prod/staging/dev/DR)
 │   ├── Audit Log                  — Compliance-grade event trail
 │   └── Integrations               — Jira, ServiceNow, OpenTelemetry
-├── Dashboard (index.html)         — 31-view SPA, Chart.js, Lucide icons
+├── Dashboard (Next.js)             — 31-view app, Recharts, Tailwind, dark/light theme
 ├── Database (PostgreSQL)         — Metrics, events, alerts, incidents, logs
 ├── Cache (Redis)                 — Real-time data, pub/sub
 └── Kubernetes (minikube)         — 2x API replicas, DaemonSet agent
@@ -73,7 +73,7 @@ PULSE Platform
 
 **Docker Compose (simplest):**
 ```bash
-git clone https://github.com/YOUR_ORG/pulse.git && cd pulse
+git clone https://github.com/Nightfuryxd/pulse.git && cd pulse
 cp .env.example .env    # Edit: OPENAI_API_KEY or OLLAMA_URL
 docker compose up -d
 # Dashboard: http://localhost:8000
@@ -146,17 +146,81 @@ In-app notification bell with unread count badge. Persistent feed of alerts, inc
 
 ---
 
-## Stack
+## Tech Stack
 
-```
-Python 3.11 / FastAPI      — API server (150+ endpoints)
-PostgreSQL 15              — Persistent storage
-Redis 7                    — Cache + real-time pub/sub
-psutil                     — Cross-platform system metrics
-Chart.js + Lucide          — Dashboard charting + icons
-OpenAI / Ollama            — AI root cause analysis
-Docker / Kubernetes        — Container orchestration
-```
+### Backend
+| Technology | Version | Purpose |
+|---|---|---|
+| Python | 3.11 | Runtime |
+| FastAPI | 0.115.0 | REST API framework (150+ endpoints) |
+| Uvicorn | 0.30.6 | ASGI server |
+| SQLAlchemy | 2.0.35 | Async ORM |
+| Alembic | 1.13.3 | Database migrations |
+| Pydantic | 2.9.2 | Data validation & settings |
+| python-jose + bcrypt | 3.3.0 / 4.2.0 | JWT auth & password hashing |
+| httpx | 0.27.2 | Async HTTP client |
+| WebSockets | 13.1 | Real-time updates |
+| psutil | 6.0.0 | Cross-platform system metrics |
+| pysnmp | 5.1.0 | SNMP v2c/v3 device monitoring |
+
+### Frontend
+| Technology | Version | Purpose |
+|---|---|---|
+| Next.js | 16.2.1 | React framework |
+| React | 19.2.4 | UI library |
+| TypeScript | 5.x | Type safety |
+| Tailwind CSS | 4.x | Utility-first styling |
+| Recharts | 3.8.0 | Metric visualization |
+| Lucide React | 1.0.1 | Icon system |
+
+### Data Layer
+| Technology | Version | Purpose |
+|---|---|---|
+| PostgreSQL | 16 | Primary database |
+| asyncpg | 0.29.0 | Async PostgreSQL driver |
+| Redis | 7 | Cache, pub/sub, rate limiting |
+
+### AI / LLM
+| Technology | Purpose |
+|---|---|
+| OpenAI GPT-4o | Cloud-based root cause analysis, NL queries, predictive alerting |
+| Ollama | Air-gapped/self-hosted LLM (llama3.1+) |
+
+### Infrastructure & DevOps
+| Technology | Purpose |
+|---|---|
+| Docker | Containerization (multi-stage builds, python:3.11-slim) |
+| Docker Compose | Local development orchestration |
+| Kubernetes | Production orchestration (Deployments, DaemonSets, RBAC) |
+| Minikube | Local K8s development |
+
+### Cloud Providers (Optional)
+| Provider | SDKs |
+|---|---|
+| AWS | boto3 — CloudWatch, EC2, RDS, Lambda, ECS, ELB, Cost Anomalies |
+| Azure | azure-identity, azure-mgmt-compute, azure-mgmt-monitor, azure-mgmt-sql, azure-mgmt-web |
+| GCP | google-cloud-monitoring, google-cloud-compute, google-api-python-client |
+
+### Integrations
+| Category | Services |
+|---|---|
+| Chat | Slack, Microsoft Teams, Discord, Telegram, Google Chat, Zoom |
+| Incident | PagerDuty, Opsgenie, Jira, ServiceNow |
+| Communication | SMTP email, Twilio SMS, WhatsApp (Twilio + Meta Cloud API) |
+| Observability | OpenTelemetry (traces, spans) |
+| Generic | Webhooks (custom HTTP endpoints) |
+
+### SDKs
+| Language | Package |
+|---|---|
+| Python | pulse-sdk (Python 3.8+, httpx, SQLAlchemy) |
+| Node.js | @pulse/sdk |
+| Go | pulse-sdk-go |
+
+### MCP (Model Context Protocol)
+| Component | Purpose |
+|---|---|
+| pulse_mcp.py | Exposes PULSE data to Claude via MCP tools |
 
 ---
 
@@ -172,6 +236,7 @@ Docker / Kubernetes        — Container orchestration
 | **Phase 6** | Notification center, service catalog, alerting workflow builder | 3 modules |
 | **Phase 7** | Log-based alerting, APM/distributed tracing, multi-environment, audit log, auto-refresh, WebSocket | 4 modules |
 | **Phase 8** | Metric explorer, alert template packs, incident war room, user & team management, billing & usage | 5 modules |
+| **Phase 9** | Next.js migration (React 19, TypeScript, Tailwind 4), dark/light theme, OAuth (Google/GitHub) | Full rewrite |
 
 ---
 
@@ -194,4 +259,4 @@ Docker / Kubernetes        — Container orchestration
 
 ## Status
 
-Production-ready. 8 phases complete. Deployed on Kubernetes with 2 API replicas and DaemonSet agent.
+Production-ready. 9 phases complete. 18,000+ LOC across 45+ modules. Deployed on Kubernetes with 2 API replicas and DaemonSet agent. Next.js dashboard with 31 views.

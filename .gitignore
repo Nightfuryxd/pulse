@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.pyo
@@ -8,3 +10,9 @@ __pycache__/
 node_modules/
 dist/
 *.log
+*.db
+.agents/
+.claude-flow/
+.swarm/
+.claude/memory.db
+.mcp.json
