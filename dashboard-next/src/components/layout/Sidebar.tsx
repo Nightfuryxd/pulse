@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -7,7 +8,8 @@ import {
   Rss, Network, ScrollText, Globe, Search, TrendingUp,
   MessageSquare, FileText, BookOpen, LayoutDashboard, FolderKanban,
   Workflow, Phone, Radio, ListChecks, Swords, Users, CreditCard,
-  ClipboardList, Layers, Settings, Zap, Gauge, Play, DollarSign, BellRing, X
+  ClipboardList, Layers, Settings, Zap, Gauge, Play, DollarSign, BellRing, X,
+  ChevronDown
 } from 'lucide-react';
 
 const navSections = [
@@ -93,58 +95,111 @@ const navSections = [
 
 export default function Sidebar({ mobileOpen, onClose }: { mobileOpen?: boolean; onClose?: () => void }) {
   const pathname = usePathname();
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  };
 
   return (
-    <>
-      {/* Mobile overlay */}
-      {mobileOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />}
+    <aside
+      className={`
+        fixed left-0 top-0 bottom-0 w-[220px] bg-[var(--surface)]/95 backdrop-blur-md
+        border-r border-[var(--border-color)] flex flex-col z-50 overflow-y-auto
+        transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+        ${mobileOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0'}
+        lg:translate-x-0 lg:opacity-100
+      `}
+    >
+      {/* Logo */}
+      <div className="px-5 py-5 border-b border-[var(--border-color)] flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5 no-underline group">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-purple-500 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow duration-200">
+            <Activity className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-[17px] font-extrabold tracking-tight text-[var(--text)]">
+            PULSE
+          </span>
+        </Link>
+        <button onClick={onClose} className="lg:hidden p-1.5 rounded-lg hover:bg-[var(--surface2)] transition-colors duration-150">
+          <X className="w-4 h-4 text-[var(--text3)]" />
+        </button>
+      </div>
 
-      <aside className={`fixed left-0 top-0 bottom-0 w-[220px] bg-[var(--surface)] border-r border-[var(--border-color)] flex flex-col z-50 overflow-y-auto transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
-        {/* Logo */}
-        <div className="px-5 py-5 border-b border-[var(--border-color)] flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 no-underline">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--accent)] to-purple-500 flex items-center justify-center">
-              <Activity className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-[17px] font-extrabold tracking-tight text-[var(--text)]">
-              PULSE
-            </span>
-          </Link>
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-[var(--surface2)]">
-            <X className="w-4 h-4 text-[var(--text3)]" />
-          </button>
-        </div>
+      {/* Navigation */}
+      <nav className="flex-1 py-3 px-3 space-y-1 overflow-y-auto">
+        {navSections.map(section => {
+          const isCollapsed = collapsedSections.has(section.label);
+          const hasActiveItem = section.items.some(item =>
+            pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+          );
 
-        {/* Navigation */}
-        <nav className="flex-1 py-3 px-3 space-y-4 overflow-y-auto">
-          {navSections.map(section => (
-            <div key={section.label}>
-              <div className="text-[10px] font-bold uppercase tracking-[1.2px] text-[var(--text3)] px-2 mb-1.5">
-                {section.label}
+          return (
+            <div key={section.label} className="mb-1">
+              <button
+                onClick={() => toggleSection(section.label)}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-[var(--surface2)] transition-colors duration-150 group"
+              >
+                <span className={`text-[10px] font-bold uppercase tracking-[1.2px] ${
+                  hasActiveItem ? 'text-[var(--accent2)]' : 'text-[var(--text3)]'
+                } transition-colors duration-150`}>
+                  {section.label}
+                </span>
+                <ChevronDown
+                  className={`w-3 h-3 text-[var(--text3)] opacity-0 group-hover:opacity-100 transition-all duration-200 ${
+                    isCollapsed ? '-rotate-90' : 'rotate-0'
+                  }`}
+                />
+              </button>
+
+              <div
+                className={`overflow-hidden transition-all duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                  isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[500px] opacity-100'
+                }`}
+              >
+                <div className="py-0.5">
+                  {section.items.map(item => {
+                    const isActive = pathname === item.href ||
+                      (item.href !== '/' && pathname.startsWith(item.href));
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={onClose}
+                        className={`
+                          relative flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium
+                          no-underline transition-all duration-150
+                          ${isActive
+                            ? 'bg-[var(--accent-soft)] text-[var(--accent2)]'
+                            : 'text-[var(--text2)] hover:bg-[var(--surface2)] hover:text-[var(--text)] hover:translate-x-0.5'
+                          }
+                        `}
+                      >
+                        {/* Active indicator bar */}
+                        {isActive && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[var(--accent)] transition-all duration-200" />
+                        )}
+                        <item.icon className={`w-4 h-4 flex-shrink-0 transition-transform duration-150 ${
+                          isActive ? '' : 'group-hover:scale-105'
+                        }`} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
-              {section.items.map(item => {
-                const isActive = pathname === item.href ||
-                  (item.href !== '/' && pathname.startsWith(item.href));
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    className={`flex items-center gap-2.5 px-2.5 py-[7px] rounded-lg text-[13px] font-medium transition-all duration-200 no-underline ${
-                      isActive
-                        ? 'bg-[var(--accent-soft)] text-[var(--accent2)]'
-                        : 'text-[var(--text2)] hover:bg-[var(--surface2)] hover:text-[var(--text)]'
-                    }`}
-                  >
-                    <item.icon className="w-4 h-4 flex-shrink-0" />
-                    {item.label}
-                  </Link>
-                );
-              })}
             </div>
-          ))}
-        </nav>
-      </aside>
-    </>
+          );
+        })}
+      </nav>
+    </aside>
   );
 }

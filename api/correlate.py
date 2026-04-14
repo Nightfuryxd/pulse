@@ -9,6 +9,9 @@ Logic:
   2. Score pairs by: time proximity, same category, same infrastructure tier, node proximity
   3. If group score > threshold → merge into one correlated incident
   4. The RCA engine then gets context from ALL correlated nodes, not just one
+
+Optimized: batch-fetches open alerts once per correlation call and groups
+them in memory to avoid N+1 query patterns.
 """
 import hashlib
 import time
@@ -111,6 +114,35 @@ def score_pair(a1: dict, a2: dict) -> float:
     return round(t_score * 0.35 + cat_score * 0.35 + node_score * 0.2 + sev_score * 0.1, 3)
 
 
+def _prefilter_open_alerts(open_alerts: list[dict], now: datetime, exclude_id=None) -> list[dict]:
+    """
+    Batch pre-filter: parse timestamps once, drop alerts outside the
+    correlation window, and exclude the new alert itself.  Returns a
+    list of alert dicts with a parsed ``_ts`` field attached.
+    """
+    cutoff = now - timedelta(seconds=WINDOW_SECONDS)
+    filtered = []
+    for alert in open_alerts:
+        if exclude_id is not None and alert.get("id") == exclude_id:
+            continue
+        ts = alert.get("ts") or datetime.utcnow()
+        if isinstance(ts, str):
+            ts = datetime.fromisoformat(ts)
+        if ts < cutoff:
+            continue
+        alert = {**alert, "_ts": ts}
+        filtered.append(alert)
+    return filtered
+
+
+def _group_by_category(alerts: list[dict]) -> dict[str, list[dict]]:
+    """Group pre-filtered alerts by category for fast lookup."""
+    groups: dict[str, list[dict]] = defaultdict(list)
+    for a in alerts:
+        groups[a.get("category", "")].append(a)
+    return groups
+
+
 def correlate(new_alert: dict, open_alerts: list[dict]) -> dict:
     """
     Given a new alert and a list of recent open alerts,
@@ -128,22 +160,19 @@ def correlate(new_alert: dict, open_alerts: list[dict]) -> dict:
     if isinstance(now, str):
         now = datetime.fromisoformat(now)
 
+    # Batch pre-filter: one pass over open_alerts, drop out-of-window entries
+    candidates = _prefilter_open_alerts(open_alerts, now, exclude_id=new_alert.get("id"))
+
     best_group    = None
     best_score    = 0.0
     best_matches  = []
 
-    for existing in open_alerts:
-        if existing.get("id") == new_alert.get("id"):
-            continue
-        ex_ts = existing.get("ts") or datetime.utcnow()
-        if isinstance(ex_ts, str):
-            ex_ts = datetime.fromisoformat(ex_ts)
-        if (now - ex_ts).total_seconds() > WINDOW_SECONDS:
-            continue
+    new_alert_with_ts = {**new_alert, "ts": now}
 
+    for existing in candidates:
         score = score_pair(
-            {**new_alert, "ts": now},
-            {**existing, "ts": ex_ts}
+            new_alert_with_ts,
+            {**existing, "ts": existing["_ts"]}
         )
         if score >= SCORE_THRESHOLD:
             best_matches.append((score, existing))

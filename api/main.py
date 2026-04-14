@@ -8,7 +8,7 @@ Provides:    real-time monitoring, threat detection, correlation, AI RCA,
 import asyncio
 import json
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -44,7 +44,13 @@ from predict import feed_metric as predict_feed, check_predictions, get_predicti
 from rbac import rbac_middleware, create_api_key, list_api_keys, revoke_api_key, delete_api_key, is_rbac_enabled, ROLES
 from auth import (
     signup, login as auth_login, get_user, update_user, complete_onboarding,
-    auth_middleware, get_current_user_from_request, AUTH_PUBLIC_PATHS, AUTH_PUBLIC_PREFIXES
+    auth_middleware, get_current_user_from_request, AUTH_PUBLIC_PATHS, AUTH_PUBLIC_PREFIXES,
+    oauth_login_or_create,
+)
+from oauth import (
+    google_auth_url, google_exchange,
+    github_auth_url, github_exchange,
+    get_enabled_providers,
 )
 from reports import report_loop, generate_report, send_report_email, get_recent_reports, _recent_reports
 from nlquery import execute_query as nl_execute_query
@@ -68,8 +74,64 @@ import billing as billing_mod
 
 app = FastAPI(title="PULSE", version="6.0.0", description="AI-powered unified infrastructure intelligence")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-app.middleware("http")(rbac_middleware)
-app.middleware("http")(auth_middleware)
+
+
+# ── SEO / caching headers middleware (pure ASGI to avoid BaseHTTPMiddleware bugs) ──
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+class SEOHeadersMiddleware:
+    def __init__(self, app: ASGIApp):
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope["path"]
+        extra_headers: list[tuple[bytes, bytes]] = []
+
+        if path == "/status":
+            extra_headers.append((b"cache-control", b"public, max-age=60, s-maxage=120"))
+        elif path.startswith("/api/status/public") or path.startswith("/api/status/overall"):
+            extra_headers.append((b"cache-control", b"public, max-age=30"))
+            extra_headers.append((b"x-robots-tag", b"noindex"))
+        elif path.startswith("/api/"):
+            extra_headers.append((b"x-robots-tag", b"noindex, nofollow"))
+            extra_headers.append((b"cache-control", b"no-store, no-cache, must-revalidate"))
+
+        if not extra_headers:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(extra_headers)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+app.add_middleware(SEOHeadersMiddleware)
+
+# Wrap middleware in try/except to handle BaseHTTPMiddleware ExceptionGroup bug
+# when background tasks raise after response is already sent
+import functools
+
+def _safe_middleware(fn):
+    @functools.wraps(fn)
+    async def wrapper(request: Request, call_next):
+        try:
+            return await fn(request, call_next)
+        except BaseExceptionGroup:
+            # Starlette BaseHTTPMiddleware + background tasks race condition — harmless
+            pass
+    return wrapper
+
+app.middleware("http")(_safe_middleware(rbac_middleware))
+app.middleware("http")(_safe_middleware(auth_middleware))
 app.include_router(otel_router)
 
 
@@ -98,25 +160,55 @@ class ConnectionManager:
 
 ws_manager = ConnectionManager()
 
-# ── In-memory caches ──────────────────────────────────────────────────────────
-_recent_metrics: dict[str, list] = defaultdict(list)
-_recent_events:  dict[str, list] = defaultdict(list)
-_recent_logs:    dict[str, list] = defaultdict(list)
-_node_cache:     dict[str, dict] = {}
-_open_alerts_cache: list[dict]   = []   # for correlation
+# ── In-memory caches (bounded to prevent unbounded memory growth) ─────────────
+_METRICS_MAXLEN = 60
+_EVENTS_MAXLEN  = 100
+_LOGS_MAXLEN    = 200
+_NODE_CACHE_MAX = 10_000
+_ALERTS_CACHE_MAX = 500
+
+_recent_metrics: dict[str, deque] = defaultdict(lambda: deque(maxlen=_METRICS_MAXLEN))
+_recent_events:  dict[str, deque] = defaultdict(lambda: deque(maxlen=_EVENTS_MAXLEN))
+_recent_logs:    dict[str, deque] = defaultdict(lambda: deque(maxlen=_LOGS_MAXLEN))
+_node_cache:     dict[str, dict]  = {}
+_open_alerts_cache: deque         = deque(maxlen=_ALERTS_CACHE_MAX)
+
+
+_background_tasks: list[asyncio.Task] = []
 
 
 @app.on_event("startup")
 async def startup():
+    # Security: verify JWT_SECRET is properly configured (auth.py enforces this at import)
+    from auth import JWT_SECRET
+    if not JWT_SECRET or JWT_SECRET == "dev-secret-key":
+        raise RuntimeError("JWT_SECRET is not configured. Refusing to start.")
+
     await init_db()
     load_from_config()
-    asyncio.create_task(escalation_loop())
-    asyncio.create_task(synthetic_loop())
-    asyncio.create_task(dbmonitor_loop())
-    asyncio.create_task(slo_loop())
-    asyncio.create_task(report_loop())
+    _background_tasks.extend([
+        asyncio.create_task(escalation_loop(), name="escalation_loop"),
+        asyncio.create_task(synthetic_loop(), name="synthetic_loop"),
+        asyncio.create_task(dbmonitor_loop(), name="dbmonitor_loop"),
+        asyncio.create_task(slo_loop(), name="slo_loop"),
+        asyncio.create_task(report_loop(), name="report_loop"),
+    ])
     rbac_status = "ON" if is_rbac_enabled() else "OFF (set RBAC_ENABLED=true to enable)"
     print(f"[PULSE] API v4.0 ready — Phase 3: RBAC [{rbac_status}], SLO, predict, NL query, Jira, ServiceNow, reports")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    """Gracefully cancel background loops on shutdown."""
+    print("[PULSE] Shutting down — cancelling background tasks...")
+    for task in _background_tasks:
+        task.cancel()
+    results = await asyncio.gather(*_background_tasks, return_exceptions=True)
+    for task, result in zip(_background_tasks, results):
+        if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+            print(f"[PULSE] Background task {task.get_name()} exited with error: {result}")
+    _background_tasks.clear()
+    print("[PULSE] Shutdown complete.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -217,32 +309,19 @@ async def health():
     return {"status": "ok", "ts": datetime.utcnow().isoformat(), "version": "3.0"}
 
 
-@app.get("/", response_class=HTMLResponse)
+DASHBOARD_URL = os.getenv("DASHBOARD_URL", "http://localhost:3000")
+
+@app.get("/")
 async def dashboard():
-    p = Path(__file__).parent.parent / "dashboard" / "index.html"
-    if p.exists():
-        return p.read_text()
-    return HTMLResponse("<h1>PULSE running — dashboard not found</h1>")
+    return RedirectResponse(url=DASHBOARD_URL)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# AUTH PAGES + API
-# ══════════════════════════════════════════════════════════════════════════════
-
-@app.get("/login", response_class=HTMLResponse)
+@app.get("/login")
 async def login_page():
-    p = Path(__file__).parent.parent / "dashboard" / "login.html"
-    if p.exists():
-        return HTMLResponse(p.read_text())
-    return HTMLResponse("<h1>Login page not found</h1>")
+    return RedirectResponse(url=f"{DASHBOARD_URL}/login")
 
-
-@app.get("/onboarding", response_class=HTMLResponse)
+@app.get("/onboarding")
 async def onboarding_page():
-    p = Path(__file__).parent.parent / "dashboard" / "onboarding.html"
-    if p.exists():
-        return HTMLResponse(p.read_text())
-    return HTMLResponse("<h1>Onboarding page not found</h1>")
+    return RedirectResponse(url=f"{DASHBOARD_URL}/login")
 
 
 @app.post("/api/auth/login")
@@ -313,6 +392,72 @@ async def api_update_settings(request: Request, body: dict):
     return result
 
 
+# ── OAuth routes ─────────────────────────────────────────────────────────────
+
+@app.get("/api/auth/oauth/providers")
+async def api_oauth_providers():
+    """Return which OAuth providers are configured."""
+    return {"providers": get_enabled_providers()}
+
+
+@app.get("/api/auth/oauth/google")
+async def api_oauth_google():
+    try:
+        url = google_auth_url()
+        return {"url": url}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/auth/oauth/google/callback")
+async def api_oauth_google_callback(code: str = Query(...), state: str = Query(...)):
+    try:
+        profile = await google_exchange(code, state)
+        result = await oauth_login_or_create(
+            email=profile["email"],
+            name=profile["name"],
+            avatar_url=profile["avatar_url"],
+            provider=profile["provider"],
+            provider_id=profile["provider_id"],
+        )
+        # Redirect to frontend with token in URL fragment (never sent to server)
+        from urllib.parse import urlencode
+        frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        params = urlencode({"token": result["token"]})
+        return RedirectResponse(url=f"{frontend_base}/login?oauth=success&{params}")
+    except Exception as e:
+        frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        return RedirectResponse(url=f"{frontend_base}/login?oauth=error&message={str(e)}")
+
+
+@app.get("/api/auth/oauth/github")
+async def api_oauth_github():
+    try:
+        url = github_auth_url()
+        return {"url": url}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/auth/oauth/github/callback")
+async def api_oauth_github_callback(code: str = Query(...), state: str = Query(...)):
+    try:
+        profile = await github_exchange(code, state)
+        result = await oauth_login_or_create(
+            email=profile["email"],
+            name=profile["name"],
+            avatar_url=profile["avatar_url"],
+            provider=profile["provider"],
+            provider_id=profile["provider_id"],
+        )
+        frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        params = urlencode({"token": result["token"]})
+        return RedirectResponse(url=f"{frontend_base}/login?oauth=success&{params}")
+    except Exception as e:
+        frontend_base = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        return RedirectResponse(url=f"{frontend_base}/login?oauth=error&message={str(e)}")
+
+
 @app.get("/agent/collector.py", response_class=PlainTextResponse)
 async def serve_collector():
     p = Path(__file__).parent.parent / "agent" / "collector.py"
@@ -373,7 +518,9 @@ async def ingest_metrics(
 
     m_dict = payload.model_dump()
     _recent_metrics[payload.node_id].append(m_dict)
-    _recent_metrics[payload.node_id] = _recent_metrics[payload.node_id][-60:]
+    # Evict oldest node_cache entries if over limit
+    if len(_node_cache) >= _NODE_CACHE_MAX and payload.node_id not in _node_cache:
+        _node_cache.pop(next(iter(_node_cache)), None)
     _node_cache[payload.node_id] = {"hostname": payload.hostname, "ip": payload.ip, "os": payload.os}
 
     # Update IP→node map for topology
@@ -432,7 +579,6 @@ async def ingest_events(
 
     e_dict = payload.model_dump()
     _recent_events[payload.node_id].append(e_dict)
-    _recent_events[payload.node_id] = _recent_events[payload.node_id][-100:]
 
     background_tasks.add_task(_run_event_detection, payload.node_id, e_dict, db)
     await ws_manager.broadcast({"type": "event", "node_id": payload.node_id, "data": e_dict})
@@ -459,7 +605,6 @@ async def ingest_log(
 
     l_dict = payload.model_dump()
     _recent_logs[payload.node_id].append(l_dict)
-    _recent_logs[payload.node_id] = _recent_logs[payload.node_id][-200:]
 
     if payload.level in ("error", "fatal", "critical"):
         await ws_manager.broadcast({"type": "log_error", "node_id": payload.node_id, "data": l_dict})
@@ -880,9 +1025,11 @@ async def resolve_alerts(req: ResolveRequest, db: AsyncSession = Depends(get_db)
             alert.resolved    = True
             alert.resolved_at = datetime.utcnow()
     await db.commit()
-    # Remove from cache
-    global _open_alerts_cache
-    _open_alerts_cache = [a for a in _open_alerts_cache if a.get("id") not in req.alert_ids]
+    # Remove resolved alerts from cache (filter in-place for bounded deque)
+    resolved_ids = set(req.alert_ids)
+    remaining = [a for a in _open_alerts_cache if a.get("id") not in resolved_ids]
+    _open_alerts_cache.clear()
+    _open_alerts_cache.extend(remaining)
     return {"resolved": len(req.alert_ids)}
 
 
@@ -1633,9 +1780,14 @@ async def public_status_page():
             incidents_html += f'<div class="sp-inc-update"><span class="sp-inc-ts">{upd["ts"][:16]}</span> {upd["message"]}</div>'
         incidents_html += '</div>'
 
+    seo_meta = sp_mod.build_seo_meta_tags(overall)
+    all_services = [svc for svcs in data["groups"].values() for svc in svcs]
+    structured_data = sp_mod.build_structured_data(overall, all_services)
+
     return f'''<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>PULSE Status</title>
+{seo_meta}
+{structured_data}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}

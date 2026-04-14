@@ -17,6 +17,10 @@ import yaml
 from notifications import format_incident_payload, notify_all_teams
 
 
+# ── Locks for mutable state ──────────────────────────────────────────────────
+_maintenance_lock = asyncio.Lock()
+_escalation_lock = asyncio.Lock()
+
 # ── Maintenance Windows ──────────────────────────────────────────────────────
 
 _maintenance_windows: list[dict] = []
@@ -34,15 +38,17 @@ def load_maintenance_windows() -> list[dict]:
     return data.get("windows") or []
 
 
-def add_maintenance_window(window: dict):
+async def add_maintenance_window(window: dict):
     """Add a runtime maintenance window (API-created)."""
-    _maintenance_windows.append(window)
+    async with _maintenance_lock:
+        _maintenance_windows.append(window)
 
 
-def remove_maintenance_window(window_id: str):
+async def remove_maintenance_window(window_id: str):
     """Remove a runtime maintenance window by ID."""
     global _maintenance_windows
-    _maintenance_windows = [w for w in _maintenance_windows if w.get("id") != window_id]
+    async with _maintenance_lock:
+        _maintenance_windows = [w for w in _maintenance_windows if w.get("id") != window_id]
 
 
 def is_in_maintenance(node_id: str, categories: Optional[list[str]] = None) -> bool:
@@ -125,30 +131,32 @@ def get_escalation_policy(severity: str) -> Optional[dict]:
     return policies.get("policies", {}).get(severity.lower())
 
 
-def register_escalation(incident_id: int, incident: dict, rca: dict, teams_routing: dict):
+async def register_escalation(incident_id: int, incident: dict, rca: dict, teams_routing: dict):
     """Register an incident for escalation tracking."""
     severity = incident.get("severity", "medium")
     policy = get_escalation_policy(severity)
     if not policy:
         return
 
-    _pending_escalations[incident_id] = {
-        "incident": incident,
-        "rca": rca,
-        "teams_routing": teams_routing,
-        "created_at": datetime.utcnow(),
-        "current_tier": 0,
-        "tiers": policy.get("tiers", []),
-        "acknowledged": False,
-    }
+    async with _escalation_lock:
+        _pending_escalations[incident_id] = {
+            "incident": incident,
+            "rca": rca,
+            "teams_routing": teams_routing,
+            "created_at": datetime.utcnow(),
+            "current_tier": 0,
+            "tiers": policy.get("tiers", []),
+            "acknowledged": False,
+        }
 
 
-def acknowledge_incident(incident_id: int) -> bool:
+async def acknowledge_incident(incident_id: int) -> bool:
     """Mark an incident as acknowledged — stops escalation."""
-    if incident_id in _pending_escalations:
-        _pending_escalations[incident_id]["acknowledged"] = True
-        return True
-    return False
+    async with _escalation_lock:
+        if incident_id in _pending_escalations:
+            _pending_escalations[incident_id]["acknowledged"] = True
+            return True
+        return False
 
 
 async def check_escalations():
@@ -156,40 +164,41 @@ async def check_escalations():
     now = datetime.utcnow()
     teams_config = _load_teams_for_escalation()
 
-    for inc_id, state in list(_pending_escalations.items()):
-        if state["acknowledged"]:
-            continue
+    async with _escalation_lock:
+        for inc_id, state in list(_pending_escalations.items()):
+            if state["acknowledged"]:
+                continue
 
-        tiers = state["tiers"]
-        current_tier = state["current_tier"]
+            tiers = state["tiers"]
+            current_tier = state["current_tier"]
 
-        if current_tier >= len(tiers):
-            continue  # All tiers exhausted
+            if current_tier >= len(tiers):
+                continue  # All tiers exhausted
 
-        tier = tiers[current_tier]
-        wait_minutes = tier.get("after_minutes", 5)
-        elapsed = (now - state["created_at"]).total_seconds() / 60
+            tier = tiers[current_tier]
+            wait_minutes = tier.get("after_minutes", 5)
+            elapsed = (now - state["created_at"]).total_seconds() / 60
 
-        if elapsed >= wait_minutes:
-            # Escalate to this tier
-            escalation_targets = tier.get("notify", [])
-            payload = format_incident_payload(
-                state["incident"], state["rca"], state["teams_routing"]
-            )
-            payload["title"] = f"[ESCALATION L{current_tier + 1}] {payload['title']}"
+            if elapsed >= wait_minutes:
+                # Escalate to this tier
+                escalation_targets = tier.get("notify", [])
+                payload = format_incident_payload(
+                    state["incident"], state["rca"], state["teams_routing"]
+                )
+                payload["title"] = f"[ESCALATION L{current_tier + 1}] {payload['title']}"
 
-            # Build teams_routing for escalation targets
-            esc_teams = {"owners": [], "observers": []}
-            for target in escalation_targets:
-                team = teams_config.get(target)
-                if team:
-                    esc_teams["owners"].append(team)
+                # Build teams_routing for escalation targets
+                esc_teams = {"owners": [], "observers": []}
+                for target in escalation_targets:
+                    team = teams_config.get(target)
+                    if team:
+                        esc_teams["owners"].append(team)
 
-            if esc_teams["owners"]:
-                await notify_all_teams(esc_teams, payload)
-                print(f"[PULSE] Escalation L{current_tier + 1} for Incident #{inc_id} -> {escalation_targets}")
+                if esc_teams["owners"]:
+                    await notify_all_teams(esc_teams, payload)
+                    print(f"[PULSE] Escalation L{current_tier + 1} for Incident #{inc_id} -> {escalation_targets}")
 
-            state["current_tier"] = current_tier + 1
+                state["current_tier"] = current_tier + 1
 
 
 def _load_teams_for_escalation() -> dict:

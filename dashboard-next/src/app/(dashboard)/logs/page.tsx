@@ -10,9 +10,10 @@ interface LogEntry { id: number; timestamp: string; level: string; source: strin
 const levelColors: Record<string, string> = { ERROR: 'text-red-400', WARN: 'text-yellow-400', INFO: 'text-blue-400', DEBUG: 'text-zinc-500' };
 
 export default function LogsPage() {
-  const { data: logs, loading } = useApi<LogEntry[]>('/api/logs');
+  const { data: logsResp, loading } = useApi<{ logs: LogEntry[] }>('/api/logs');
+  const logs = logsResp?.logs || [];
   const [search, setSearch] = useState('');
-  const filtered = (logs || []).filter(l => !search || l.message.toLowerCase().includes(search.toLowerCase()) || l.source.toLowerCase().includes(search.toLowerCase()));
+  const filtered = logs.filter(l => !search || l.message?.toLowerCase().includes(search.toLowerCase()) || l.source?.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="space-y-6">

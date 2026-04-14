@@ -2,10 +2,40 @@
 Detection Engine — evaluates metrics and events against YAML rules.
 Produces Alert objects when thresholds are breached.
 """
+import ast
+import operator
+import re
 import yaml
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+
+# ── Alert deduplication cache ────────────────────────────────────────────────
+# Key: (rule_id, node_id) → last fire timestamp (datetime)
+_dedup_cache: dict[tuple[str, str], datetime] = {}
+DEDUP_WINDOW_MINUTES = 10  # suppress duplicate alerts within this window
+
+
+def _is_duplicate(node_id: str, rule_id: str, now: datetime) -> bool:
+    """Return True if the same (rule_id, node_id) fired within the dedup window."""
+    key = (rule_id, node_id)
+    last_fire = _dedup_cache.get(key)
+    if last_fire and (now - last_fire).total_seconds() < DEDUP_WINDOW_MINUTES * 60:
+        return True
+    return False
+
+
+def _record_fire(node_id: str, rule_id: str, now: datetime):
+    """Record that an alert was fired so future duplicates are suppressed."""
+    key = (rule_id, node_id)
+    _dedup_cache[key] = now
+    # Periodic cleanup: remove stale entries (> 2× window) to bound memory
+    if len(_dedup_cache) > 5000:
+        cutoff = now - timedelta(minutes=DEDUP_WINDOW_MINUTES * 2)
+        stale = [k for k, ts in _dedup_cache.items() if ts < cutoff]
+        for k in stale:
+            del _dedup_cache[k]
 
 
 _rules_cache: list[dict] | None = None
@@ -83,12 +113,74 @@ def delete_rule(rule_id: str) -> bool:
 _windows: dict[str, list[tuple[datetime, float]]] = {}
 
 
+_SAFE_OPS = {
+    ast.Gt:    operator.gt,
+    ast.Lt:    operator.lt,
+    ast.GtE:   operator.ge,
+    ast.LtE:   operator.le,
+    ast.Eq:    operator.eq,
+    ast.NotEq: operator.ne,
+}
+
+
+def _safe_eval_node(node: ast.AST, variables: dict) -> Any:
+    """Recursively evaluate an AST node using only safe operations."""
+    if isinstance(node, ast.Expression):
+        return _safe_eval_node(node.body, variables)
+    if isinstance(node, ast.Constant):
+        if not isinstance(node.value, (int, float, bool)):
+            raise ValueError(f"Unsupported constant type: {type(node.value)}")
+        return node.value
+    if isinstance(node, ast.Name):
+        if node.id in variables:
+            return variables[node.id]
+        raise ValueError(f"Unknown variable: {node.id}")
+    if isinstance(node, ast.Attribute):
+        # Support dotted names like metric.cpu_percent -> "cpu_percent"
+        # by resolving from left: get the namespace dict, then the attr
+        if isinstance(node.value, ast.Name) and node.value.id in variables:
+            ns_val = variables[node.value.id]
+            if isinstance(ns_val, dict) and node.attr in ns_val:
+                return ns_val[node.attr]
+        raise ValueError(f"Unknown attribute: {ast.dump(node)}")
+    if isinstance(node, ast.Compare):
+        left = _safe_eval_node(node.left, variables)
+        for op_node, comparator in zip(node.ops, node.comparators):
+            op_func = _SAFE_OPS.get(type(op_node))
+            if op_func is None:
+                raise ValueError(f"Unsupported comparison: {type(op_node).__name__}")
+            right = _safe_eval_node(comparator, variables)
+            if not op_func(left, right):
+                return False
+            left = right
+        return True
+    if isinstance(node, ast.BoolOp):
+        if isinstance(node.op, ast.And):
+            return all(_safe_eval_node(v, variables) for v in node.values)
+        if isinstance(node.op, ast.Or):
+            return any(_safe_eval_node(v, variables) for v in node.values)
+        raise ValueError(f"Unsupported bool op: {type(node.op).__name__}")
+    if isinstance(node, ast.UnaryOp):
+        if isinstance(node.op, ast.Not):
+            return not _safe_eval_node(node.operand, variables)
+        if isinstance(node.op, ast.USub):
+            return -_safe_eval_node(node.operand, variables)
+        raise ValueError(f"Unsupported unary op: {type(node.op).__name__}")
+    raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+
+
+def _safe_eval_condition(condition: str, variables: dict) -> bool:
+    """Parse and evaluate a condition string safely — no eval()."""
+    tree = ast.parse(condition, mode="eval")
+    return bool(_safe_eval_node(tree, variables))
+
+
 def _check_condition(condition: str, context: dict) -> tuple[bool, float]:
     """
     Evaluate a rule condition string against a context dict.
     Returns (triggered, value).
     """
-    # Flatten context for eval: metric.cpu_percent -> cpu_percent
+    # Flatten context for variable lookup: metric.cpu_percent -> cpu_percent
     flat = {}
     for ns, obj in context.items():
         if isinstance(obj, dict):
@@ -96,8 +188,11 @@ def _check_condition(condition: str, context: dict) -> tuple[bool, float]:
         else:
             flat[ns] = obj
 
+    # Also keep the namespaced context so dotted references (metric.cpu_percent) work
+    variables = {**flat, **context}
+
     try:
-        result = eval(condition, {"__builtins__": {}}, flat)
+        result = _safe_eval_condition(condition, variables)
         # Extract the primary numeric value
         value = 0.0
         for key in ["cpu_percent", "memory_percent", "disk_percent", "count", "unique_ports", "value"]:
@@ -134,8 +229,11 @@ def evaluate_metric(node_id: str, metric: dict) -> list[dict]:
         key      = f"{node_id}:{rule['id']}"
 
         if window_s == 0:
-            # Instant trigger
+            # Instant trigger — check dedup before firing
+            if _is_duplicate(node_id, rule["id"], now):
+                continue
             alerts.append(_make_alert(node_id, rule, value, now))
+            _record_fire(node_id, rule["id"], now)
             continue
 
         # Windowed: must sustain for window_seconds
@@ -145,8 +243,10 @@ def evaluate_metric(node_id: str, metric: dict) -> list[dict]:
                          if (now - t).total_seconds() <= window_s]
 
         if len(_windows[key]) >= 2:
-            # Condition held for the full window — trigger once
-            alerts.append(_make_alert(node_id, rule, value, now))
+            # Condition held for the full window — trigger once (with dedup)
+            if not _is_duplicate(node_id, rule["id"], now):
+                alerts.append(_make_alert(node_id, rule, value, now))
+                _record_fire(node_id, rule["id"], now)
             _windows[key] = []  # reset so it doesn't spam
 
     return alerts
@@ -170,7 +270,9 @@ def evaluate_event(node_id: str, event: dict) -> list[dict]:
         context = {"event": event}
         triggered, value = _check_condition(rule["condition"], context)
         if triggered:
-            alerts.append(_make_alert(node_id, rule, value, now))
+            if not _is_duplicate(node_id, rule["id"], now):
+                alerts.append(_make_alert(node_id, rule, value, now))
+                _record_fire(node_id, rule["id"], now)
 
     return alerts
 

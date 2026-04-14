@@ -9,14 +9,16 @@ Example: CPU normally at 20%. Static rule fires at 95%.
 """
 import asyncio
 import math
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from datetime import datetime, timezone
 from typing import Optional
 
 
 # Rolling window per node per metric — stores last N data points
 # Key: (node_id, metric_name) → deque of values
-_baselines: dict[tuple, deque] = defaultdict(lambda: deque(maxlen=360))  # ~1 hour at 10s interval
+# Bounded to MAX_TRACKED_NODES * num_metrics via LRU eviction.
+MAX_TRACKED_KEYS = 5000 * 7  # 5000 nodes × 7 metrics
+_baselines: OrderedDict[tuple, deque] = OrderedDict()
 
 # Anomaly config
 ZSCORE_THRESHOLD = 3.0       # How many standard deviations = anomaly
@@ -65,13 +67,27 @@ def evaluate_metric(node_id: str, metric: dict) -> list[dict]:
             continue
 
         key = (node_id, metric_name)
-        window = _baselines[key]
+
+        # LRU: move to end on access; create if missing
+        if key in _baselines:
+            _baselines.move_to_end(key)
+            window = _baselines[key]
+        else:
+            window = deque(maxlen=360)
+            _baselines[key] = window
+            # Evict oldest entry if over capacity
+            while len(_baselines) > MAX_TRACKED_KEYS:
+                _baselines.popitem(last=False)
 
         # Add to baseline
         window.append(value)
 
         # Not enough data yet
         if len(window) < MIN_SAMPLES:
+            continue
+
+        # Cooldown check FIRST — skip expensive z-score math when in cooldown
+        if now - _cooldown.get(key, 0) < COOLDOWN_SECONDS:
             continue
 
         # Calculate z-score
@@ -84,9 +100,6 @@ def evaluate_metric(node_id: str, metric: dict) -> list[dict]:
         zscore = (value - mean) / std
 
         if abs(zscore) >= ZSCORE_THRESHOLD:
-            # Cooldown check
-            if now - _cooldown.get(key, 0) < COOLDOWN_SECONDS:
-                continue
             _cooldown[key] = now
 
             direction = "spike" if zscore > 0 else "drop"

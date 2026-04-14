@@ -21,10 +21,20 @@ from db import Base, SessionLocal
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_hex(32))
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if not JWT_SECRET or JWT_SECRET == "dev-secret-key":
+    raise RuntimeError(
+        "SECURITY: JWT_SECRET environment variable is not set or is using the "
+        "insecure default 'dev-secret-key'. Set a strong random secret via: "
+        "export JWT_SECRET=$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
+    )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 24
 ALLOW_SIGNUP = os.getenv("ALLOW_SIGNUP", "true").lower() == "true"
+
+# TODO: Add rate limiting to login/signup endpoints to prevent brute-force attacks.
+# Consider using slowapi or fastapi-limiter with a Redis backend.
+# Recommended limits: login 5 req/min per IP, signup 3 req/min per IP.
 
 # ── User model ───────────────────────────────────────────────────────────────
 
@@ -32,13 +42,15 @@ class User(Base):
     __tablename__ = "users"
     id:             Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
     email:          Mapped[str]           = mapped_column(String, unique=True, index=True)
-    password_hash:  Mapped[str]           = mapped_column(String)
+    password_hash:  Mapped[str]           = mapped_column(String, default="")
     name:           Mapped[str]           = mapped_column(String, default="")
     role:           Mapped[str]           = mapped_column(String, default="admin")  # admin, member, viewer
     org_name:       Mapped[str]           = mapped_column(String, default="My Organization")
     avatar_url:     Mapped[str]           = mapped_column(String, default="")
     onboarded:      Mapped[bool]          = mapped_column(Boolean, default=False)
     settings:       Mapped[dict]          = mapped_column(JSON, default=dict)
+    oauth_provider: Mapped[str]           = mapped_column(String, default="")
+    oauth_id:       Mapped[str]           = mapped_column(String, default="")
     created_at:     Mapped[datetime]      = mapped_column(DateTime, server_default=func.now())
     last_login:     Mapped[datetime|None] = mapped_column(DateTime, nullable=True)
 
@@ -154,6 +166,39 @@ async def complete_onboarding(user_id: int) -> dict:
     return await update_user(user_id, {"onboarded": True})
 
 
+async def oauth_login_or_create(email: str, name: str, avatar_url: str, provider: str, provider_id: str) -> dict:
+    """Find or create a user from an OAuth callback, then return a JWT."""
+    async with SessionLocal() as db:
+        user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
+
+        if user:
+            # Update OAuth fields + avatar if missing
+            user.oauth_provider = provider
+            user.oauth_id = provider_id
+            if avatar_url and not user.avatar_url:
+                user.avatar_url = avatar_url
+            user.last_login = datetime.utcnow()
+            await db.commit()
+            await db.refresh(user)
+        else:
+            # Auto-create user from OAuth
+            user = User(
+                email=email,
+                name=name,
+                avatar_url=avatar_url,
+                oauth_provider=provider,
+                oauth_id=provider_id,
+                role="admin",
+                onboarded=False,
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+
+        token = create_token(user.id, user.email, user.role)
+        return {"token": token, "user": _user_dict(user)}
+
+
 def _user_dict(user: User) -> dict:
     return {
         "id": user.id,
@@ -164,6 +209,7 @@ def _user_dict(user: User) -> dict:
         "avatar_url": user.avatar_url,
         "onboarded": user.onboarded,
         "settings": user.settings or {},
+        "oauth_provider": user.oauth_provider or "",
         "created_at": user.created_at.isoformat() if user.created_at else None,
     }
 
@@ -192,11 +238,14 @@ def get_current_user_from_request(request: Request) -> Optional[dict]:
 # Public paths that don't need auth
 AUTH_PUBLIC_PATHS = {
     "/", "/health", "/api/stats", "/api/auth/login", "/api/auth/signup",
-    "/api/auth/check", "/login", "/signup", "/onboarding",
+    "/api/auth/check", "/api/auth/oauth/providers",
+    "/login", "/signup", "/onboarding",
     "/agent/collector.py", "/install.sh", "/install.ps1", "/status",
 }
 
-AUTH_PUBLIC_PREFIXES = ("/api/", "/v1/traces", "/v1/metrics", "/v1/logs", "/ws/")
+AUTH_PUBLIC_PREFIXES_OAUTH = ("/api/auth/oauth/",)
+
+AUTH_PUBLIC_PREFIXES = ("/api/", "/v1/traces", "/v1/metrics", "/v1/logs", "/ws/", "/api/auth/oauth/")
 
 
 async def auth_middleware(request: Request, call_next):

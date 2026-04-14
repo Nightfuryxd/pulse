@@ -219,3 +219,82 @@ def get_public_status_data() -> dict:
         "incidents": list_status_incidents(10),
         "generated_at": datetime.utcnow().isoformat(),
     }
+
+
+# ── SEO Helpers ──────────────────────────────────────────────────────────────
+
+def build_seo_meta_tags(overall: dict, base_url: str = "https://status.pulse.dev") -> str:
+    """Generate HTML meta tags for SEO on the public status page."""
+    title = f"PULSE Status — {overall['message']}"
+    description = (
+        "Real-time system status for PULSE infrastructure. "
+        "View current operational status, uptime history, and incident reports."
+    )
+    return (
+        f'<title>{title}</title>\n'
+        f'<meta name="description" content="{description}">\n'
+        f'<meta name="robots" content="index, follow">\n'
+        f'<link rel="canonical" href="{base_url}/status">\n'
+        f'<meta property="og:type" content="website">\n'
+        f'<meta property="og:title" content="{title}">\n'
+        f'<meta property="og:description" content="{description}">\n'
+        f'<meta property="og:url" content="{base_url}/status">\n'
+        f'<meta property="og:image" content="{base_url}/og-status.png">\n'
+        f'<meta property="og:site_name" content="PULSE Status">\n'
+        f'<meta name="twitter:card" content="summary_large_image">\n'
+        f'<meta name="twitter:title" content="{title}">\n'
+        f'<meta name="twitter:description" content="{description}">\n'
+        f'<meta name="twitter:image" content="{base_url}/og-status.png">\n'
+    )
+
+
+def build_structured_data(overall: dict, services: list[dict], base_url: str = "https://status.pulse.dev") -> str:
+    """Generate JSON-LD structured data for the public status page."""
+    import json as _json
+
+    service_items = []
+    for svc in services:
+        service_items.append({
+            "@type": "Service",
+            "name": svc["name"],
+            "description": svc.get("description", ""),
+            "serviceType": "Infrastructure",
+            "provider": {"@type": "Organization", "name": "PULSE"},
+            "termsOfService": f"{base_url}/terms",
+        })
+
+    structured = [
+        {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "PULSE Status",
+            "url": f"{base_url}/status",
+            "description": "Real-time system status for PULSE infrastructure.",
+        },
+        {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            "name": "PULSE",
+            "url": base_url,
+            "logo": f"{base_url}/logo.png",
+            "description": "AI-powered unified infrastructure intelligence platform.",
+        },
+    ]
+
+    if service_items:
+        structured.append({
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            "name": f"PULSE Status — {overall['message']}",
+            "url": f"{base_url}/status",
+            "mainEntity": service_items,
+        })
+
+    scripts = ""
+    for item in structured:
+        scripts += (
+            '<script type="application/ld+json">'
+            + _json.dumps(item, separators=(",", ":"))
+            + "</script>\n"
+        )
+    return scripts

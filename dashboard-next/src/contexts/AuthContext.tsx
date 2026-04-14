@@ -8,6 +8,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (name: string, email: string, password: string, org: string) => Promise<void>;
+  loginWithOAuthToken: (token: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   login: async () => {},
   signup: async () => {},
+  loginWithOAuthToken: async () => {},
   logout: () => {},
 });
 
@@ -44,13 +46,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('pulse_user', JSON.stringify(data.user));
   }, []);
 
+  const loginWithOAuthToken = useCallback(async (token: string) => {
+    api.handleOAuthCallback(token);
+    const user = await api.get<User>('/api/auth/me');
+    setUser(user);
+    localStorage.setItem('pulse_user', JSON.stringify(user));
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     api.logout();
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, loginWithOAuthToken, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -5,18 +5,34 @@ import Panel from '@/components/ui/Panel';
 import Badge from '@/components/ui/Badge';
 import { Server, Cpu, MemoryStick, HardDrive, Clock } from 'lucide-react';
 
-interface NodeData {
-  hostname: string;
+interface NodeMetric {
   cpu_percent: number;
   memory_percent: number;
   disk_percent: number;
+  load_avg: number;
+  net_bytes_sent: number;
+  net_bytes_recv: number;
+  process_count: number;
+}
+
+interface NodeData {
+  id: string;
+  hostname: string;
   status: string;
   os: string;
-  platform: string;
-  uptime_hours: number;
   ip: string;
   last_seen: string;
-  agent_version: string;
+  latest_metric: NodeMetric | null;
+}
+
+function timeAgo(ts: string) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function UsageBar({ value, color }: { value: number; color: string }) {
@@ -31,7 +47,8 @@ function UsageBar({ value, color }: { value: number; color: string }) {
 }
 
 export default function NodesPage() {
-  const { data: nodes, loading } = useApi<NodeData[]>('/api/nodes');
+  const { data: resp, loading } = useApi<{ nodes: NodeData[] }>('/api/nodes');
+  const nodes = resp?.nodes || [];
 
   return (
     <div className="space-y-6">
@@ -58,40 +75,44 @@ export default function NodesPage() {
                     <div className="text-xs text-[var(--text3)]">{node.ip} · {node.os}</div>
                   </div>
                 </div>
-                <Badge variant={node.status === 'online' ? 'success' : 'resolved'} dot>
+                <Badge variant={node.status === 'online' || node.status === 'active' ? 'success' : 'resolved'} dot>
                   {node.status}
                 </Badge>
               </div>
 
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-[var(--text3)] flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</span>
-                    <span className={`font-bold ${node.cpu_percent > 85 ? 'text-red-400' : 'text-[var(--text2)]'}`}>{node.cpu_percent}%</span>
+              {node.latest_metric ? (
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-[var(--text3)] flex items-center gap-1"><Cpu className="w-3 h-3" /> CPU</span>
+                      <span className={`font-bold ${node.latest_metric.cpu_percent > 85 ? 'text-red-400' : 'text-[var(--text2)]'}`}>{node.latest_metric.cpu_percent}%</span>
+                    </div>
+                    <UsageBar value={node.latest_metric.cpu_percent} color={node.latest_metric.cpu_percent > 85 ? '#f87171' : '#6366f1'} />
                   </div>
-                  <UsageBar value={node.cpu_percent} color={node.cpu_percent > 85 ? '#f87171' : '#6366f1'} />
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-[var(--text3)] flex items-center gap-1"><MemoryStick className="w-3 h-3" /> Memory</span>
-                    <span className={`font-bold ${node.memory_percent > 90 ? 'text-red-400' : 'text-[var(--text2)]'}`}>{node.memory_percent}%</span>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-[var(--text3)] flex items-center gap-1"><MemoryStick className="w-3 h-3" /> Memory</span>
+                      <span className={`font-bold ${node.latest_metric.memory_percent > 90 ? 'text-red-400' : 'text-[var(--text2)]'}`}>{node.latest_metric.memory_percent}%</span>
+                    </div>
+                    <UsageBar value={node.latest_metric.memory_percent} color={node.latest_metric.memory_percent > 90 ? '#f87171' : '#34d399'} />
                   </div>
-                  <UsageBar value={node.memory_percent} color={node.memory_percent > 90 ? '#f87171' : '#34d399'} />
-                </div>
 
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-[var(--text3)] flex items-center gap-1"><HardDrive className="w-3 h-3" /> Disk</span>
-                    <span className={`font-bold ${node.disk_percent > 80 ? 'text-yellow-400' : 'text-[var(--text2)]'}`}>{node.disk_percent}%</span>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-[var(--text3)] flex items-center gap-1"><HardDrive className="w-3 h-3" /> Disk</span>
+                      <span className={`font-bold ${node.latest_metric.disk_percent > 80 ? 'text-yellow-400' : 'text-[var(--text2)]'}`}>{node.latest_metric.disk_percent}%</span>
+                    </div>
+                    <UsageBar value={node.latest_metric.disk_percent} color={node.latest_metric.disk_percent > 80 ? '#fbbf24' : '#22d3ee'} />
                   </div>
-                  <UsageBar value={node.disk_percent} color={node.disk_percent > 80 ? '#fbbf24' : '#22d3ee'} />
                 </div>
-              </div>
+              ) : (
+                <div className="text-xs text-[var(--text3)] text-center py-4">No metrics yet</div>
+              )}
 
               <div className="flex items-center justify-between mt-4 pt-3 border-t border-[var(--border-color)] text-[11px] text-[var(--text3)]">
-                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Up {Math.round(node.uptime_hours)}h</span>
-                <span>Agent {node.agent_version}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Last seen {timeAgo(node.last_seen)}</span>
+                <span>{node.ip}</span>
               </div>
             </Panel>
           ))}

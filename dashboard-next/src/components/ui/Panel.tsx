@@ -6,11 +6,17 @@ interface PanelProps {
   action?: React.ReactNode;
   className?: string;
   noPad?: boolean;
+  hoverable?: boolean;
 }
 
-export default function Panel({ children, title, action, className = '', noPad }: PanelProps) {
+export default function Panel({ children, title, action, className = '', noPad, hoverable = false }: PanelProps) {
   return (
-    <div className={`bg-[var(--surface)] border border-[var(--border-color)] rounded-2xl overflow-hidden animate-slide-up ${className}`}>
+    <div className={`
+      bg-[var(--surface)] border border-[var(--border-color)] rounded-2xl overflow-hidden animate-slide-up
+      transition-all duration-200
+      ${hoverable ? 'hover:shadow-lg hover:shadow-black/5 hover:-translate-y-0.5 hover:border-[var(--accent)]/30 cursor-pointer' : ''}
+      ${className}
+    `}>
       {title && (
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-color)]">
           <h3 className="text-sm font-bold tracking-tight text-[var(--text)]">{title}</h3>
