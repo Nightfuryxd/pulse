@@ -1562,19 +1562,19 @@ async def export_dashboard(db: AsyncSession = Depends(get_db)):
     """Export current dashboard state as a printable HTML report for PDF generation."""
     # Query current stats
     node_count = await db.scalar(select(func.count()).select_from(Node))
-    alert_count = await db.scalar(select(func.count()).select_from(Alert).where(Alert.status == "open"))
+    alert_count = await db.scalar(select(func.count()).select_from(Alert).where(Alert.resolved.is_(False)))
     incident_count = await db.scalar(select(func.count()).select_from(Incident).where(Incident.status == "open"))
 
     # Recent alerts
     recent_alerts_q = await db.execute(
-        select(Alert).where(Alert.status == "open").order_by(desc(Alert.created_at)).limit(20)
+        select(Alert).where(Alert.resolved.is_(False)).order_by(desc(Alert.ts)).limit(20)
     )
     recent_alerts = recent_alerts_q.scalars().all()
 
     # Build HTML report
     alert_rows = ""
     for a in recent_alerts:
-        alert_rows += f"<tr><td>{a.severity}</td><td>{a.rule_name}</td><td>{a.node}</td><td>{a.message}</td><td>{a.created_at}</td></tr>"
+        alert_rows += f"<tr><td>{a.severity}</td><td>{a.rule_name}</td><td>{a.node_id}</td><td>{a.message}</td><td>{a.ts}</td></tr>"
 
     html = f"""<!DOCTYPE html>
 <html><head><title>PULSE Dashboard Report</title>
