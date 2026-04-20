@@ -110,6 +110,14 @@ export default function Sidebar({ mobileOpen, onClose }: { mobileOpen?: boolean;
   };
 
   return (
+    <>
+    {/* Mobile overlay backdrop */}
+    {mobileOpen && (
+      <div
+        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+        onClick={onClose}
+      />
+    )}
     <aside
       className={`
         fixed left-0 top-0 bottom-0 w-[220px] bg-[var(--surface)]/95 backdrop-blur-md
@@ -201,5 +209,6 @@ export default function Sidebar({ mobileOpen, onClose }: { mobileOpen?: boolean;
         })}
       </nav>
     </aside>
+    </>
   );
 }

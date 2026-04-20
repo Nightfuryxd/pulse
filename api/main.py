@@ -76,6 +76,131 @@ app = FastAPI(title="PULSE", version="6.0.0", description="AI-powered unified in
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+# ── Rate Limiting middleware (pure ASGI, in-memory, no external deps) ──
+import time as _time
+
+class RateLimitMiddleware:
+    """
+    IP-based rate limiter using a sliding-window counter stored in memory.
+    - 100 req/min for general API endpoints
+    - 10 req/min for auth endpoints (/api/auth/login, /api/auth/signup)
+    - Skips WebSocket upgrades and the health-check endpoint (/health)
+    """
+
+    GENERAL_LIMIT = 100
+    AUTH_LIMIT = 10
+    WINDOW = 60  # seconds
+    CLEANUP_INTERVAL = 120  # seconds — sweep stale entries every 2 min
+    AUTH_PATHS = ("/api/auth/login", "/api/auth/signup")
+
+    def __init__(self, app: "ASGIApp"):
+        self.app = app
+        # key → deque of request timestamps
+        self._hits: dict[str, deque] = {}
+        self._last_cleanup: float = _time.monotonic()
+
+    # --- helpers -----------------------------------------------------------
+    def _client_ip(self, scope) -> str:
+        # Prefer X-Forwarded-For when behind a proxy
+        for header_name, header_val in scope.get("headers", []):
+            if header_name == b"x-forwarded-for":
+                return header_val.decode().split(",")[0].strip()
+        client = scope.get("client")
+        return client[0] if client else "unknown"
+
+    def _cleanup(self, now: float):
+        """Remove buckets whose newest entry is older than the window."""
+        stale_keys = [k for k, dq in self._hits.items() if dq and dq[-1] < now - self.WINDOW]
+        for k in stale_keys:
+            del self._hits[k]
+        # also drop empty deques
+        empty_keys = [k for k, dq in self._hits.items() if not dq]
+        for k in empty_keys:
+            del self._hits[k]
+        self._last_cleanup = now
+
+    def _is_allowed(self, key: str, limit: int, now: float) -> tuple[bool, int, int]:
+        """Returns (allowed, remaining, reset_epoch)."""
+        dq = self._hits.get(key)
+        if dq is None:
+            dq = deque()
+            self._hits[key] = dq
+
+        # Trim timestamps outside the current window
+        cutoff = now - self.WINDOW
+        while dq and dq[0] < cutoff:
+            dq.popleft()
+
+        remaining = max(0, limit - len(dq))
+        reset_at = int(now + self.WINDOW)
+
+        if len(dq) >= limit:
+            return False, 0, reset_at
+
+        dq.append(now)
+        remaining = max(0, limit - len(dq))
+        return True, remaining, reset_at
+
+    # --- ASGI entrypoint ---------------------------------------------------
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            # Skip WebSocket and lifespan
+            await self.app(scope, receive, send)
+            return
+
+        path: str = scope["path"]
+
+        # Skip health-check
+        if path == "/health":
+            await self.app(scope, receive, send)
+            return
+
+        now = _time.monotonic()
+
+        # Periodic cleanup
+        if now - self._last_cleanup > self.CLEANUP_INTERVAL:
+            self._cleanup(now)
+
+        ip = self._client_ip(scope)
+        is_auth = path in self.AUTH_PATHS
+        limit = self.AUTH_LIMIT if is_auth else self.GENERAL_LIMIT
+        bucket_key = f"{ip}:auth" if is_auth else f"{ip}:api"
+
+        allowed, remaining, reset_at = self._is_allowed(bucket_key, limit, now)
+
+        rate_headers: list[tuple[bytes, bytes]] = [
+            (b"x-ratelimit-limit", str(limit).encode()),
+            (b"x-ratelimit-remaining", str(remaining).encode()),
+            (b"x-ratelimit-reset", str(reset_at).encode()),
+        ]
+
+        if not allowed:
+            # 429 Too Many Requests
+            body = json.dumps({"detail": "Too many requests. Please try again later."}).encode()
+            await send({
+                "type": "http.response.start",
+                "status": 429,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"retry-after", str(self.WINDOW).encode()),
+                ] + rate_headers,
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        # Inject rate-limit headers into the downstream response
+        async def send_with_rate_headers(message):
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(rate_headers)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_rate_headers)
+
+app.add_middleware(RateLimitMiddleware)
+
+
 # ── SEO / caching headers middleware (pure ASGI to avoid BaseHTTPMiddleware bugs) ──
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -1430,6 +1555,58 @@ async def email_report(body: dict, db: AsyncSession = Depends(get_db)):
     report = await generate_report(period, db)
     result = send_report_email(report, recipients if recipients else None)
     return result
+
+
+@app.get("/api/export/dashboard", response_class=HTMLResponse)
+async def export_dashboard(db: AsyncSession = Depends(get_db)):
+    """Export current dashboard state as a printable HTML report for PDF generation."""
+    # Query current stats
+    node_count = await db.scalar(select(func.count()).select_from(Node))
+    alert_count = await db.scalar(select(func.count()).select_from(Alert).where(Alert.status == "open"))
+    incident_count = await db.scalar(select(func.count()).select_from(Incident).where(Incident.status == "open"))
+
+    # Recent alerts
+    recent_alerts_q = await db.execute(
+        select(Alert).where(Alert.status == "open").order_by(desc(Alert.created_at)).limit(20)
+    )
+    recent_alerts = recent_alerts_q.scalars().all()
+
+    # Build HTML report
+    alert_rows = ""
+    for a in recent_alerts:
+        alert_rows += f"<tr><td>{a.severity}</td><td>{a.rule_name}</td><td>{a.node}</td><td>{a.message}</td><td>{a.created_at}</td></tr>"
+
+    html = f"""<!DOCTYPE html>
+<html><head><title>PULSE Dashboard Report</title>
+<style>
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #1a1a2e; }}
+h1 {{ color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }}
+h2 {{ color: #334155; margin-top: 32px; }}
+.stats {{ display: flex; gap: 24px; margin: 24px 0; }}
+.stat {{ background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; flex: 1; text-align: center; }}
+.stat .value {{ font-size: 32px; font-weight: 800; color: #6366f1; }}
+.stat .label {{ font-size: 13px; color: #64748b; margin-top: 4px; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }}
+th {{ background: #f1f5f9; padding: 10px 12px; text-align: left; font-weight: 600; border-bottom: 2px solid #e2e8f0; }}
+td {{ padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }}
+tr:hover {{ background: #f8fafc; }}
+.footer {{ margin-top: 48px; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px; }}
+@media print {{ body {{ margin: 20px; }} }}
+</style></head><body>
+<h1>PULSE Dashboard Report</h1>
+<p style="color:#64748b">Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}</p>
+<div class="stats">
+<div class="stat"><div class="value">{node_count}</div><div class="label">Nodes</div></div>
+<div class="stat"><div class="value">{alert_count}</div><div class="label">Open Alerts</div></div>
+<div class="stat"><div class="value">{incident_count}</div><div class="label">Open Incidents</div></div>
+</div>
+<h2>Open Alerts</h2>
+<table><tr><th>Severity</th><th>Rule</th><th>Node</th><th>Message</th><th>Created</th></tr>
+{alert_rows}
+</table>
+<div class="footer">PULSE Infrastructure Intelligence Platform — Exported Report</div>
+</body></html>"""
+    return HTMLResponse(content=html)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

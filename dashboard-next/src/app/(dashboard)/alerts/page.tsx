@@ -98,7 +98,7 @@ export default function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Alerts</h1>
           <p className="text-sm text-[var(--text3)] mt-1">{alerts?.length || 0} total alerts</p>
@@ -120,7 +120,7 @@ export default function AlertsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <Filter className="w-4 h-4 text-[var(--text3)]" />
         {['all', 'critical', 'high', 'medium', 'low'].map(sev => (
           <button
@@ -149,7 +149,8 @@ export default function AlertsPage() {
             <div className="text-sm">No alerts found</div>
           </div>
         ) : (
-          <div className="divide-y divide-[var(--border-color)]">
+          <div className="overflow-x-auto">
+          <div className="divide-y divide-[var(--border-color)] min-w-[640px]">
             {/* Bulk select header */}
             <div className="flex items-center gap-4 px-5 py-2.5 bg-[var(--surface2)]/50 text-xs text-[var(--text3)] font-semibold">
               <input
@@ -159,9 +160,9 @@ export default function AlertsPage() {
                 className="rounded border-[var(--border-color)] accent-[var(--accent)]"
               />
               <span className="flex-1">Alert</span>
-              <span className="w-24">Node</span>
+              <span className="w-24 hidden sm:block">Node</span>
               <span className="w-20">Severity</span>
-              <span className="w-20">Status</span>
+              <span className="w-20 hidden md:block">Status</span>
               <span className="w-16 text-right">Time</span>
             </div>
 
@@ -189,14 +190,14 @@ export default function AlertsPage() {
                     <div className="text-sm font-semibold">{a.rule_name}</div>
                     <div className="text-xs text-[var(--text3)] mt-0.5 truncate">{a.message}</div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs text-[var(--text3)] w-24">
+                  <div className="items-center gap-1 text-xs text-[var(--text3)] w-24 hidden sm:flex">
                     <Server className="w-3 h-3" />
                     {a.node}
                   </div>
                   <div className="w-20">
                     <Badge variant={a.severity}>{a.severity}</Badge>
                   </div>
-                  <div className="w-20">
+                  <div className="w-20 hidden md:block">
                     <Badge variant={a.status} dot pulse={a.status === 'fired'}>{a.status}</Badge>
                   </div>
                   <span className="text-xs text-[var(--text3)] whitespace-nowrap flex items-center gap-1 w-16 justify-end">
@@ -285,6 +286,7 @@ export default function AlertsPage() {
                 )}
               </div>
             ))}
+          </div>
           </div>
         )}
       </Panel>

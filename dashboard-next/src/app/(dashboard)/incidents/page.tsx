@@ -102,7 +102,7 @@ export default function IncidentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight">Incidents</h1>
           <p className="text-sm text-[var(--text3)] mt-1">
@@ -157,7 +157,7 @@ export default function IncidentsPage() {
                     </div>
                     <div className="text-sm text-[var(--text2)] mt-1">{inc.title}</div>
 
-                    <div className="flex items-center gap-4 mt-3 text-xs text-[var(--text3)]">
+                    <div className="flex items-center gap-3 sm:gap-4 mt-3 text-xs text-[var(--text3)] flex-wrap">
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {timeAgo(inc.created_at)}</span>
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {inc.alert_count} alerts</span>
                       <a

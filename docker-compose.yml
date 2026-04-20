@@ -41,7 +41,7 @@ services:
     volumes:
       - ./api:/app
       - ./config:/app/config
-      - ./dashboard:/app/../dashboard
+      - ./dashboard-next:/dashboard-next
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,6 +84,19 @@ services:
         condition: service_healthy
     # network_mode: host   # Uncomment if SNMP/SSH targets are on LAN
     privileged: true
+
+  dashboard:
+    build:
+      context: ./dashboard-next
+      dockerfile: Dockerfile
+    container_name: pulse-dashboard
+    environment:
+      NEXT_PUBLIC_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:

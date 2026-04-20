@@ -4,7 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import StatCard, { SkeletonCard } from '@/components/ui/StatCard';
 import Panel from '@/components/ui/Panel';
 import Badge from '@/components/ui/Badge';
-import { Server, Bell, AlertTriangle, Activity, Clock, Cpu, HardDrive } from 'lucide-react';
+import { Server, Bell, AlertTriangle, Activity, Clock, Cpu, HardDrive, Download } from 'lucide-react';
 
 interface NodeMetric {
   cpu_percent: number;
@@ -92,9 +92,17 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">Overview</h1>
-        <p className="text-sm text-[var(--text3)] mt-1">Infrastructure health at a glance</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">Overview</h1>
+          <p className="text-sm text-[var(--text3)] mt-1">Infrastructure health at a glance</p>
+        </div>
+        <button
+          onClick={() => window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/export/dashboard`, '_blank')}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--surface2)] text-xs font-bold text-[var(--text2)] hover:text-[var(--text)] hover:bg-[var(--surface3)]"
+        >
+          <Download className="w-3.5 h-3.5" /> Export PDF
+        </button>
       </div>
 
       {/* Stat Cards */}
@@ -156,10 +164,10 @@ export default function OverviewPage() {
                     <div className="text-sm font-semibold group-hover:text-[var(--text)] transition-colors duration-150">{n.hostname}</div>
                     <div className="text-xs text-[var(--text3)]">{n.os}</div>
                   </div>
-                  <div className="flex items-center gap-4 text-xs text-[var(--text2)]">
+                  <div className="flex items-center gap-2 sm:gap-4 text-xs text-[var(--text2)] flex-shrink-0">
                     <span className="flex items-center gap-1"><Cpu className="w-3 h-3" />{n.latest_metric?.cpu_percent ?? '—'}%</span>
-                    <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{n.latest_metric?.memory_percent ?? '—'}%</span>
-                    <span className="flex items-center gap-1"><HardDrive className="w-3 h-3" />{n.latest_metric?.disk_percent ?? '—'}%</span>
+                    <span className="hidden sm:flex items-center gap-1"><Activity className="w-3 h-3" />{n.latest_metric?.memory_percent ?? '—'}%</span>
+                    <span className="hidden sm:flex items-center gap-1"><HardDrive className="w-3 h-3" />{n.latest_metric?.disk_percent ?? '—'}%</span>
                   </div>
                 </div>
               )) || <div className="text-sm text-[var(--text3)] py-4 text-center">No nodes</div>}
@@ -180,11 +188,13 @@ export default function OverviewPage() {
                   i.severity === 'critical' ? 'text-red-400' : i.severity === 'high' ? 'text-orange-400' : 'text-yellow-400'
                 }`} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold group-hover:text-[var(--text)] transition-colors duration-150">INC-{i.id}: {i.title}</div>
+                  <div className="text-sm font-semibold group-hover:text-[var(--text)] transition-colors duration-150 truncate">INC-{i.id}: {i.title}</div>
                 </div>
-                <Badge variant={i.status}>{i.status}</Badge>
-                <Badge variant={i.severity}>{i.severity}</Badge>
-                <span className="text-xs text-[var(--text3)]">{timeAgo(i.created_at)}</span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Badge variant={i.status}>{i.status}</Badge>
+                  <Badge variant={i.severity}>{i.severity}</Badge>
+                  <span className="text-xs text-[var(--text3)] hidden sm:inline">{timeAgo(i.created_at)}</span>
+                </div>
               </div>
             )) || <div className="text-sm text-[var(--text3)] py-4 text-center">No incidents</div>}
           </div>
